@@ -1,3 +1,5 @@
+
+import sys
 import torch
 import torch.nn as nn
 
@@ -6,6 +8,8 @@ from onmt.modules import context_gate_factory, GlobalAttention
 from onmt.utils.rnn_factory import rnn_factory
 
 from onmt.utils.misc import aeq
+
+from IPython import embed
 
 
 class DecoderBase(nn.Module):
@@ -208,7 +212,7 @@ class RNNDecoderBase(DecoderBase):
               ``(tgt_len, batch, src_len)``.
         """
 
-        dec_state, dec_outs, attns = self._run_forward_pass(
+        dec_state, dec_outs, attns, rnn_output = self._run_forward_pass(
             tgt, memory_bank, memory_lengths=memory_lengths)
 
         # Update the state with the result.
@@ -231,7 +235,7 @@ class RNNDecoderBase(DecoderBase):
             for k in attns:
                 if type(attns[k]) == list:
                     attns[k] = torch.stack(attns[k])
-        return dec_outs, attns
+        return dec_outs, attns, rnn_output
 
 
 class StdRNNDecoder(RNNDecoderBase):
@@ -383,12 +387,15 @@ class InputFeedRNNDecoder(RNNDecoderBase):
         for emb_t in emb.split(1):
             decoder_input = torch.cat([emb_t.squeeze(0), input_feed], 1)
             rnn_output, dec_state = self.rnn(decoder_input, dec_state)
+
             if self.attentional:
                 decoder_output, p_attn = self.attn(
                     rnn_output,
                     memory_bank.transpose(0, 1),
                     memory_lengths=memory_lengths)
                 attns["std"].append(p_attn)
+                # embed()
+                # sys.exit()
             else:
                 decoder_output = rnn_output
             if self.context_gate is not None:
@@ -414,7 +421,10 @@ class InputFeedRNNDecoder(RNNDecoderBase):
             elif self._reuse_copy_attn:
                 attns["copy"] = attns["std"]
 
-        return dec_state, dec_outs, attns
+        # embed()
+        # sys.exit()
+
+        return dec_state, dec_outs, attns, rnn_output
 
     def _build_rnn(self, rnn_type, input_size,
                    hidden_size, num_layers, dropout):

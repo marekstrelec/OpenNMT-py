@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
+import sys
 import logging
 
 logger = logging.getLogger()
@@ -11,7 +12,7 @@ def init_logger(log_file=None, log_file_level=logging.NOTSET):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    console_handler = logging.StreamHandler()
+    console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(log_format)
     logger.handlers = [console_handler]
 
