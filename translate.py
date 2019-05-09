@@ -8,29 +8,64 @@ from onmt.utils.logging import init_logger
 from onmt.utils.misc import split_corpus
 from onmt.translate.translator import build_translator
 
+import sys
 import onmt.opts as opts
 from onmt.utils.parse import ArgumentParser
 
+from IPython import embed
+from onmt.imitation.utils import Explore
 
-def main(opt):
-    ArgumentParser.validate_translate_opts(opt)
-    logger = init_logger(opt.log_file)
 
+logger = None
+
+
+def explore(opt, shard_pairs):
+    opt.beam_size = 100
+    opt.n_best = opt.beam_size
+    # print(opt)
     translator = build_translator(opt, report_score=True)
-    src_shards = split_corpus(opt.src, opt.shard_size)
-    tgt_shards = split_corpus(opt.tgt, opt.shard_size) \
-        if opt.tgt is not None else repeat(None)
-    shard_pairs = zip(src_shards, tgt_shards)
-
     for i, (src_shard, tgt_shard) in enumerate(shard_pairs):
-        logger.info("Translating shard %d." % i)
+        if logger:
+            logger.info("Translating shard %d." % i)
         translator.translate(
             src=src_shard,
             tgt=tgt_shard,
             src_dir=opt.src_dir,
             batch_size=opt.batch_size,
             attn_debug=opt.attn_debug
-            )
+        )
+
+
+
+def normal(opt, shard_pairs):
+    translator = build_translator(opt, report_score=True)
+    for i, (src_shard, tgt_shard) in enumerate(shard_pairs):
+        if logger:
+            logger.info("Translating shard %d." % i)
+        translator.translate(
+            src=src_shard,
+            tgt=tgt_shard,
+            src_dir=opt.src_dir,
+            batch_size=opt.batch_size,
+            attn_debug=opt.attn_debug
+        )
+
+
+def main(opt):
+    global logger
+    logger = init_logger(opt.log_file)
+
+    ArgumentParser.validate_translate_opts(opt)
+    # for k,v in opt.__dict__.items():
+    #     print(k, v)
+    # sys.exit(0)
+
+    src_shards = split_corpus(opt.src, opt.shard_size)
+    tgt_shards = split_corpus(opt.tgt, opt.shard_size) \
+        if opt.tgt is not None else repeat(None)
+    shard_pairs = zip(src_shards, tgt_shards)
+
+    explore(opt, shard_pairs)
 
 
 def _get_parser():

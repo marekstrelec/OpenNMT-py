@@ -1,6 +1,10 @@
+
+import sys
 import torch
 
 from onmt.translate.decode_strategy import DecodeStrategy
+
+from IPython import embed
 
 
 class BeamSearch(DecodeStrategy):
@@ -134,6 +138,9 @@ class BeamSearch(DecodeStrategy):
         step = len(self)
         self.ensure_min_length(log_probs)
 
+        # embed()
+        # sys.exit(0)
+
         # Multiply probs by the beam probability.
         log_probs += self.topk_log_probs.view(_B * self.beam_size, 1)
 
@@ -141,14 +148,12 @@ class BeamSearch(DecodeStrategy):
 
         # if the sequence ends now, then the penalty is the current
         # length + 1, to include the EOS token
-        length_penalty = self.global_scorer.length_penalty(
-            step + 1, alpha=self.global_scorer.alpha)
+        length_penalty = self.global_scorer.length_penalty(step + 1, alpha=self.global_scorer.alpha)
 
         # Flatten probs into a list of possibilities.
         curr_scores = log_probs / length_penalty
-        curr_scores = curr_scores.reshape(_B, self.beam_size * vocab_size)
-        torch.topk(curr_scores,  self.beam_size, dim=-1,
-                   out=(self.topk_scores, self.topk_ids))
+        curr_scores = curr_scores.reshape(_B, self.beam_size * vocab_size)  # torch.Size([batch_size, 370875])
+        torch.topk(curr_scores,  self.beam_size, dim=-1,out=(self.topk_scores, self.topk_ids))
 
         # Recover log probs.
         # Length penalty is just a scalar. It doesn't matter if it's applied
@@ -197,7 +202,7 @@ class BeamSearch(DecodeStrategy):
         self.is_finished = self.topk_ids.eq(self.eos)
         self.ensure_max_length()
 
-    def update_finished(self):
+    def update_finished(self, stop=False):
         # Penalize beams that finished.
         _B_old = self.topk_log_probs.shape[0]
         step = self.alive_seq.shape[-1]  # 1 greater than the step in advance
@@ -212,6 +217,11 @@ class BeamSearch(DecodeStrategy):
                 step - 1, _B_old, self.beam_size, self.alive_attn.size(-1))
             if self.alive_attn is not None else None)
         non_finished_batch = []
+
+        if stop:
+            embed()
+            sys.exit(0)
+
         for i in range(self.is_finished.size(0)):
             b = self._batch_offset[i]
             finished_hyp = self.is_finished[i].nonzero().view(-1)
@@ -241,14 +251,18 @@ class BeamSearch(DecodeStrategy):
                 for n, (score, pred, attn) in enumerate(best_hyp):
                     if n >= self.n_best:
                         break
+                    # embed()
+                    # sys.exit(0)
                     self.scores[b].append(score)
-                    self.predictions[b].append(pred)
+                    self.predictions[b].append(pred)  # HERE
                     self.attention[b].append(
                         attn if attn is not None else [])
             else:
                 non_finished_batch.append(i)
         non_finished = torch.tensor(non_finished_batch)
         # If all sentences are translated, no need to go further.
+
+        # print("non_finished", len(non_finished))
         if len(non_finished) == 0:
             self.done = True
             return
@@ -263,8 +277,9 @@ class BeamSearch(DecodeStrategy):
                                                                non_finished)
         self._batch_index = self._batch_index.index_select(0, non_finished)
         self.select_indices = self._batch_index.view(_B_new * self.beam_size)
-        self.alive_seq = predictions.index_select(0, non_finished) \
-            .view(-1, self.alive_seq.size(-1))
+        # print("alive_seq shape", self.alive_seq.shape)
+        self.alive_seq = predictions.index_select(0, non_finished).view(-1, self.alive_seq.size(-1))
+        # print("alive_seq shape", self.alive_seq.shape)
         self.topk_scores = self.topk_scores.index_select(0, non_finished)
         self.topk_ids = self.topk_ids.index_select(0, non_finished)
         if self.alive_attn is not None:

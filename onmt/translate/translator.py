@@ -5,6 +5,8 @@ import codecs
 import os
 import math
 import time
+import sys
+import numpy as np
 from itertools import count
 
 import torch
@@ -18,6 +20,10 @@ from onmt.translate.random_sampling import RandomSampling
 from onmt.utils.misc import tile, set_random_seed
 from onmt.modules.copy_generator import collapse_copy_scores
 
+from IPython import embed
+from onmt.imitation.utils import Explore
+from tqdm import tqdm
+
 
 def build_translator(opt, report_score=True, logger=None, out_file=None):
     if out_file is None:
@@ -26,6 +32,8 @@ def build_translator(opt, report_score=True, logger=None, out_file=None):
     load_test_model = onmt.decoders.ensemble.load_test_model \
         if len(opt.models) > 1 else onmt.model_builder.load_test_model
     fields, model, model_opt = load_test_model(opt)
+
+    # print(model_opt)
 
     scorer = onmt.translate.GNMTGlobalScorer.from_opt(opt)
 
@@ -282,6 +290,7 @@ class Translator(object):
             * all_predictions is a list of `batch_size` lists
                 of `n_best` predictions
         """
+        print("beam_size:", self.beam_size)
 
         if batch_size is None:
             raise ValueError("batch_size must be set")
@@ -295,6 +304,7 @@ class Translator(object):
             sort_key=inputters.str2sortkey[self.data_type],
             filter_pred=self._filter_pred
         )
+        self.data_pointer = data
 
         data_iter = inputters.OrderedIterator(
             dataset=data,
@@ -320,54 +330,59 @@ class Translator(object):
 
         start_time = time.time()
 
-        for batch in data_iter:
-            batch_data = self.translate_batch(
-                batch, data.src_vocabs, attn_debug
-            )
-            translations = xlation_builder.from_batch(batch_data)
+        with tqdm(total=None) as pbar:
+            for batch in data_iter:
+                batch_data = self.translate_batch(
+                    batch, data.src_vocabs, attn_debug
+                )
+                translations = xlation_builder.from_batch(batch_data)
 
-            for trans in translations:
-                all_scores += [trans.pred_scores[:self.n_best]]
-                pred_score_total += trans.pred_scores[0]
-                pred_words_total += len(trans.pred_sents[0])
-                if tgt is not None:
-                    gold_score_total += trans.gold_score
-                    gold_words_total += len(trans.gold_sent) + 1
+                # embed()
 
-                n_best_preds = [" ".join(pred)
-                                for pred in trans.pred_sents[:self.n_best]]
-                all_predictions += [n_best_preds]
-                self.out_file.write('\n'.join(n_best_preds) + '\n')
-                self.out_file.flush()
+                for trans in translations:
+                    all_scores += [trans.pred_scores[:self.n_best]]
+                    pred_score_total += trans.pred_scores[0]
+                    pred_words_total += len(trans.pred_sents[0])
+                    if tgt is not None:
+                        gold_score_total += trans.gold_score
+                        gold_words_total += len(trans.gold_sent) + 1
 
-                if self.verbose:
-                    sent_number = next(counter)
-                    output = trans.log(sent_number)
-                    if self.logger:
-                        self.logger.info(output)
-                    else:
+                    n_best_preds = [" ".join(pred)
+                                    for pred in trans.pred_sents[:self.n_best]]
+                    all_predictions += [n_best_preds]
+                    self.out_file.write('\n'.join(n_best_preds) + '\n')
+                    self.out_file.flush()
+
+                    if self.verbose:
+                        sent_number = next(counter)
+                        output = trans.log(sent_number)
+                        if self.logger:
+                            self.logger.info(output)
+                        else:
+                            os.write(1, output.encode('utf-8'))
+
+                    if attn_debug:
+                        preds = trans.pred_sents[0]
+                        preds.append('</s>')
+                        attns = trans.attns[0].tolist()
+                        if self.data_type == 'text':
+                            srcs = trans.src_raw
+                        else:
+                            srcs = [str(item) for item in range(len(attns[0]))]
+                        header_format = "{:>10.10} " + "{:>10.7} " * len(srcs)
+                        row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
+                        output = header_format.format("", *srcs) + '\n'
+                        for word, row in zip(preds, attns):
+                            max_index = row.index(max(row))
+                            row_format = row_format.replace(
+                                "{:>10.7f} ", "{:*>10.7f} ", max_index + 1)
+                            row_format = row_format.replace(
+                                "{:*>10.7f} ", "{:>10.7f} ", max_index)
+                            output += row_format.format(word, *row) + '\n'
+                            row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
                         os.write(1, output.encode('utf-8'))
 
-                if attn_debug:
-                    preds = trans.pred_sents[0]
-                    preds.append('</s>')
-                    attns = trans.attns[0].tolist()
-                    if self.data_type == 'text':
-                        srcs = trans.src_raw
-                    else:
-                        srcs = [str(item) for item in range(len(attns[0]))]
-                    header_format = "{:>10.10} " + "{:>10.7} " * len(srcs)
-                    row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
-                    output = header_format.format("", *srcs) + '\n'
-                    for word, row in zip(preds, attns):
-                        max_index = row.index(max(row))
-                        row_format = row_format.replace(
-                            "{:>10.7f} ", "{:*>10.7f} ", max_index + 1)
-                        row_format = row_format.replace(
-                            "{:*>10.7f} ", "{:>10.7f} ", max_index)
-                        output += row_format.format(word, *row) + '\n'
-                        row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
-                    os.write(1, output.encode('utf-8'))
+            pbar.update(1)
 
         end_time = time.time()
 
@@ -451,7 +466,7 @@ class Translator(object):
             # Shape: (1, B, 1)
             decoder_input = random_sampler.alive_seq[:, -1].view(1, -1, 1)
 
-            log_probs, attn = self._decode_and_generate(
+            log_probs, attn, _ = self._decode_and_generate(
                 decoder_input,
                 memory_bank,
                 batch,
@@ -495,7 +510,7 @@ class Translator(object):
     def translate_batch(self, batch, src_vocabs, attn_debug):
         """Translate a batch of sentences."""
         with torch.no_grad():
-            if self.beam_size == 1:
+            if False and self.beam_size == 1:
                 return self._translate_random_sampling(
                     batch,
                     src_vocabs,
@@ -584,7 +599,7 @@ class Translator(object):
             log_probs = scores.squeeze(0).log()
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
-        return log_probs, attn
+        return log_probs, attn, dec_out
 
     def _translate_batch(
             self,
@@ -650,10 +665,23 @@ class Translator(object):
             exclusion_tokens=self._exclusion_idxs,
             memory_lengths=memory_lengths)
 
+        ###
+        explore = Explore(self.fields, self.data_pointer.examples)
+        dec_out_memory = [[] for _ in range(batch.batch_size)]
+
         for step in range(max_length):
+            # if step >= 0:
+            #     embed()
+            #     sys.exit(0)
+
+
+            # print("Step: {0}".format(step))
             decoder_input = beam.current_predictions.view(1, -1, 1)
 
-            log_probs, attn = self._decode_and_generate(
+            # print(decoder_input.shape)
+            # print(decoder_input)
+
+            log_probs, attn, dec_out = self._decode_and_generate(
                 decoder_input,
                 memory_bank,
                 batch,
@@ -663,22 +691,64 @@ class Translator(object):
                 step=step,
                 batch_offset=beam._batch_offset)
 
+            for bo in beam._batch_offset.numpy():
+                dec_data = dec_out.squeeze(0).numpy()
+                dec_data = dec_data[bo*self.beam_size:(bo+1)*self.beam_size]
+                dec_out_memory[bo].append(dec_data)
+
+            stop = False
+
+            # if len(dec_out[0]) < 45:
+            #     stop = True
+            #     embed()
+            #     sys.exit(0)
+
+            # print("dec_out", dec_out.shape)
+
+            # print(log_probs.shape)
+            # print(log_probs)
+            # print(attn.shape)
+            # print(attn)
+
             beam.advance(log_probs, attn)
             any_beam_is_finished = beam.is_finished.any()
+            # print(any_beam_is_finished)
+
+
             if any_beam_is_finished:
-                beam.update_finished()
+                # print(",", beam.alive_seq.shape)
+                beam.update_finished(stop=stop)
+                # print(",", beam.alive_seq.shape)
+
+                # print("\t", [len(n) for n in beam.predictions])
+                # if [len(n) for n in beam.predictions].count(0) == 2:
+                #     embed()
+                #     sys.exit(0)                    
+                
+
                 if beam.done:
+                    # embed()
+                    # sys.exit(0)
                     break
 
             select_indices = beam.current_origin
 
+
+
             if any_beam_is_finished:
                 # Reorder states.
                 if isinstance(memory_bank, tuple):
+                    # print("111")
                     memory_bank = tuple(x.index_select(1, select_indices)
                                         for x in memory_bank)
+                    # embed()
+                    # sys.exit(0)
                 else:
+                    # print("222")
                     memory_bank = memory_bank.index_select(1, select_indices)
+                    # print(select_indices.shape)
+                    # embed()
+                    # sys.exit(0)
 
                 memory_lengths = memory_lengths.index_select(0, select_indices)
 
@@ -688,9 +758,18 @@ class Translator(object):
             self.model.decoder.map_state(
                 lambda state, dim: state.index_select(dim, select_indices))
 
+            # if step == 1:
+            #     embed()
+            #     sys.exit(0)
+
+        # ZZZZZ
+
         results["scores"] = beam.scores
         results["predictions"] = beam.predictions
         results["attention"] = beam.attention
+
+        explore.collect_data(beam, batch, dec_out_memory)
+
         return results
 
     # This is left in the code for now, but unsued
@@ -753,7 +832,7 @@ class Translator(object):
             inp = inp.view(1, -1, 1)
 
             # (b) Decode and forward
-            out, beam_attn = self._decode_and_generate(
+            out, beam_attn, _ = self._decode_and_generate(
                 inp, memory_bank, batch, src_vocabs,
                 memory_lengths=memory_lengths, src_map=src_map, step=i
             )
@@ -793,7 +872,7 @@ class Translator(object):
         tgt = batch.tgt
         tgt_in = tgt[:-1]
 
-        log_probs, attn = self._decode_and_generate(
+        log_probs, attn, _ = self._decode_and_generate(
             tgt_in, memory_bank, batch, src_vocabs,
             memory_lengths=src_lengths, src_map=src_map)
 
