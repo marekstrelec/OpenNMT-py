@@ -167,6 +167,8 @@ class Translator(object):
 
         self.copy_attn = copy_attn
 
+        self.raw_src = {}
+
         self.global_scorer = global_scorer
         if self.global_scorer.has_cov_pen and \
                 not self.model.decoder.attentional:
@@ -272,6 +274,7 @@ class Translator(object):
     def translate(
             self,
             src,
+            explore,
             tgt=None,
             src_dir=None,
             batch_size=None,
@@ -309,6 +312,7 @@ class Translator(object):
             filter_pred=self._filter_pred
         )
         self.data_pointer = data
+        self.raw_src['data'] = self.data_pointer.examples
 
         data_iter = inputters.OrderedIterator(
             dataset=data,
@@ -338,7 +342,7 @@ class Translator(object):
         with tqdm(total=None) as pbar:
             for batch in data_iter:
                 batch_data = self.translate_batch(
-                    batch, data.src_vocabs, attn_debug
+                    batch, data.src_vocabs, attn_debug, explore
                 )
                 translations = xlation_builder.from_batch(batch_data)
 
@@ -387,7 +391,7 @@ class Translator(object):
                             row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
                         os.write(1, output.encode('utf-8'))
 
-            pbar.update(1)
+                pbar.update(1)
 
         end_time = time.time()
 
@@ -512,7 +516,7 @@ class Translator(object):
         results["attention"] = random_sampler.attention
         return results
 
-    def translate_batch(self, batch, src_vocabs, attn_debug):
+    def translate_batch(self, batch, src_vocabs, attn_debug, explore):
         """Translate a batch of sentences."""
         with torch.no_grad():
             if False and self.beam_size == 1:
@@ -528,6 +532,7 @@ class Translator(object):
                 return self._translate_batch(
                     batch,
                     src_vocabs,
+                    explore,
                     self.max_length,
                     min_length=self.min_length,
                     ratio=self.ratio,
@@ -610,6 +615,7 @@ class Translator(object):
             self,
             batch,
             src_vocabs,
+            explore,
             max_length,
             min_length=0,
             ratio=0.,
@@ -671,7 +677,7 @@ class Translator(object):
             memory_lengths=memory_lengths)
 
         ###
-        explore = Explore(self.fields, self.data_pointer.examples)
+        # explore = Explore(self.fields, self.data_pointer.examples)
         dec_out_memory = [[] for _ in range(batch.batch_size)]
 
         for step in range(max_length):
@@ -697,7 +703,7 @@ class Translator(object):
                 batch_offset=beam._batch_offset)
 
             for bo in beam._batch_offset.numpy():
-                dec_data = dec_out.squeeze(0).numpy()
+                dec_data = dec_out.squeeze(0).cpu().numpy()
                 dec_data = dec_data[bo*self.beam_size:(bo+1)*self.beam_size]
                 dec_out_memory[bo].append(dec_data)
 

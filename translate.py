@@ -20,19 +20,23 @@ logger = None
 
 
 def explore(opt, shard_pairs):
+    opt.batch_size = 50
     opt.beam_size = 100
     opt.n_best = opt.beam_size
-    # print(opt)
+    print(opt)
     translator = build_translator(opt, report_score=True)
+    explore = Explore(translator.fields, translator.raw_src)
+
     for i, (src_shard, tgt_shard) in enumerate(shard_pairs):
         if logger:
             logger.info("Translating shard %d." % i)
         translator.translate(
             src=src_shard,
             tgt=tgt_shard,
+            explore=explore,
             src_dir=opt.src_dir,
             batch_size=opt.batch_size,
-            attn_debug=opt.attn_debug
+            attn_debug=opt.attn_debug,
         )
 
 

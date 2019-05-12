@@ -17,6 +17,10 @@ class Explore(object):
         self.fields = fields
         self.raw_src = raw_src
 
+        self.collect_iter = -1
+        self.beam_data = []
+        self.dec_data = []
+
     def idtoword(self, id, field='tgt'):
         return self.fields[field].base_field.vocab.itos[id]
 
@@ -44,7 +48,7 @@ class Explore(object):
         predictions = []
         targets = []
 
-        tgts = np.squeeze(batch.tgt.numpy().transpose(1, 0, 2), axis=2)
+        tgts = np.squeeze(batch.tgt.cpu().numpy().transpose(1, 0, 2), axis=2)
         for t in tgts:
             r = self.seqtowords(
                 t,
@@ -59,7 +63,7 @@ class Explore(object):
             beam_predictions = []
             for pb in p:
                 r = self.seqtowords(
-                    pb.numpy(),
+                    pb.cpu().numpy(),
                     field='tgt',
                     ignore=[2, 3],  # <s> and </s>
                     stop_at=[1],  # <blank>
@@ -88,7 +92,7 @@ class Explore(object):
         for i_s, s in enumerate(seq):
             if s == '<unk>':
                 _, idx = attention[i_s].max(0)
-                replaced_token = self.raw_src[batch_index].src[0][idx]
+                replaced_token = self.raw_src['data'][batch_index].src[0][idx]
                 new_seq.append(replaced_token)
             else:
                 new_seq.append(s)
@@ -109,7 +113,7 @@ class Explore(object):
             for ii in range(len(hs)):
                 # embed()
                 # sys.exit(0)
-                batch_index = batch.indices.numpy()[idx]
+                batch_index = batch.indices.cpu().numpy()[idx]
                 hypot_replaced = self.replaced_unks(hs[ii], atts[ii], batch_index)
 
                 cooked_hypot = bleu.cook_test(hypot_replaced, cooked_refs, ngrams)
@@ -121,7 +125,6 @@ class Explore(object):
                     "ref": r,
                     "hyp": hs[ii],
                     "hyp_replaced": hypot_replaced,
-                    # "attention": atts[ii],
                 })
 
             data.append(beam_data)
@@ -130,17 +133,24 @@ class Explore(object):
 
 
     def collect_data(self, beam, batch, dec_out_memory, ngrams=2):
+        if 'data' not in self.raw_src:
+            raise Exception("Data missing in raw_src!")
 
         working_dir = Path("collected")
         working_dir.mkdir(exist_ok=True)
-        beam_data = []
-        dec_data = []
 
-        with open(str(working_dir.joinpath("e0.pickle")), "wb") as f:
+        if self.collect_iter == -1 or len(self.beam_data) >= 200:
+            self.beam_data = []
+            self.dec_data = []
+            self.collect_iter += 1
+
+        with open(str(working_dir.joinpath("e{0}.pickle".format(self.collect_iter))), "wb") as f:
             new_beam_data = self.collect_beam_data(beam, batch, ngrams)
-            beam_data.extend(new_beam_data)
-            dec_data.extend(dec_out_memory)
-            pickle.dump((beam_data, dec_data), f)
+            self.beam_data.extend(new_beam_data)
+            self.dec_data.extend(dec_out_memory)
+
+
+            pickle.dump((self.beam_data, self.dec_data), f)
 
 
 
