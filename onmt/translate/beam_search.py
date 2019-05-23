@@ -129,6 +129,8 @@ class BeamSearch(DecodeStrategy):
         _B = log_probs.shape[0] // self.beam_size
 
         if self._stepwise_cov_pen and self._prev_penalty is not None:
+            # DOES NOT RUN
+            assert False
             self.topk_log_probs += self._prev_penalty
             self.topk_log_probs -= self.global_scorer.cov_penalty(
                 self._coverage + attn, self.global_scorer.beta).view(
@@ -138,22 +140,23 @@ class BeamSearch(DecodeStrategy):
         step = len(self)
         self.ensure_min_length(log_probs)
 
-        # embed()
-        # sys.exit(0)
-
         # Multiply probs by the beam probability.
         log_probs += self.topk_log_probs.view(_B * self.beam_size, 1)
 
+        # Block beams where N-grams repeat
         self.block_ngram_repeats(log_probs)
 
         # if the sequence ends now, then the penalty is the current
         # length + 1, to include the EOS token
-        length_penalty = self.global_scorer.length_penalty(step + 1, alpha=self.global_scorer.alpha)
+        length_penalty = self.global_scorer.length_penalty(step + 1, alpha=self.global_scorer.alpha)  # return 1.0
 
         # Flatten probs into a list of possibilities.
         curr_scores = log_probs / length_penalty
         curr_scores = curr_scores.reshape(_B, self.beam_size * vocab_size)  # torch.Size([batch_size, 370875])
-        torch.topk(curr_scores,  self.beam_size, dim=-1,out=(self.topk_scores, self.topk_ids))
+        # if step>3:
+        #     embed()
+        #     sys.exit(0)
+        torch.topk(curr_scores,  self.beam_size, dim=-1,out=(self.topk_scores, self.topk_ids))  # Returns the k largest elements of the given input tensor along a given dimension., If dim is not given, the last dimension of the input is chosen.
 
         # Recover log probs.
         # Length penalty is just a scalar. It doesn't matter if it's applied
@@ -161,7 +164,7 @@ class BeamSearch(DecodeStrategy):
         torch.mul(self.topk_scores, length_penalty, out=self.topk_log_probs)
 
         # Resolve beam origin and map to batch index flat representation.
-        torch.div(self.topk_ids, vocab_size, out=self._batch_index)
+        torch.div(self.topk_ids, vocab_size, out=self._batch_index)  # origin is basically the ID of the beam (log_probs) this came from
         self._batch_index += self._beam_offset[:_B].unsqueeze(1)
         self.select_indices = self._batch_index.view(_B * self.beam_size)
 
@@ -177,6 +180,8 @@ class BeamSearch(DecodeStrategy):
                 self.alive_attn = current_attn
                 # update global state (step == 1)
                 if self._cov_pen:  # coverage penalty
+                    # DOES NOT RUN
+                    assert False
                     self._prev_penalty = torch.zeros_like(self.topk_log_probs)
                     self._coverage = current_attn
             else:
@@ -185,6 +190,8 @@ class BeamSearch(DecodeStrategy):
                 self.alive_attn = torch.cat([self.alive_attn, current_attn], 0)
                 # update global state (step > 1)
                 if self._cov_pen:
+                    # DOES NOT RUN
+                    assert False
                     self._coverage = self._coverage.index_select(
                         1, self.select_indices)
                     self._coverage += current_attn
@@ -193,6 +200,8 @@ class BeamSearch(DecodeStrategy):
                             _B, self.beam_size)
 
         if self._vanilla_cov_pen:
+            # DOES NOT RUN
+            assert False
             # shape: (batch_size x beam_size, 1)
             cov_penalty = self.global_scorer.cov_penalty(
                 self._coverage,

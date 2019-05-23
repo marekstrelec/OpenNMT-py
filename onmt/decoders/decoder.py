@@ -1,3 +1,5 @@
+
+import sys
 import torch
 import torch.nn as nn
 
@@ -6,6 +8,8 @@ from onmt.modules import context_gate_factory, GlobalAttention
 from onmt.utils.rnn_factory import rnn_factory
 
 from onmt.utils.misc import aeq
+
+from IPython import embed
 
 
 class DecoderBase(nn.Module):
@@ -389,6 +393,8 @@ class InputFeedRNNDecoder(RNNDecoderBase):
                     memory_bank.transpose(0, 1),
                     memory_lengths=memory_lengths)
                 attns["std"].append(p_attn)
+                # embed()
+                # sys.exit()
             else:
                 decoder_output = rnn_output
             if self.context_gate is not None:
@@ -413,6 +419,9 @@ class InputFeedRNNDecoder(RNNDecoderBase):
                 attns["copy"] += [copy_attn]
             elif self._reuse_copy_attn:
                 attns["copy"] = attns["std"]
+
+        # embed()
+        # sys.exit()
 
         return dec_state, dec_outs, attns
 

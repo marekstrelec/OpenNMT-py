@@ -21,7 +21,6 @@ from onmt.utils.misc import tile, set_random_seed
 from onmt.modules.copy_generator import collapse_copy_scores
 
 from IPython import embed
-from onmt.imitation.utils import Explore
 from tqdm import tqdm
 
 
@@ -274,7 +273,8 @@ class Translator(object):
     def translate(
             self,
             src,
-            explore,
+            explorer,
+            collector,
             tgt=None,
             src_dir=None,
             batch_size=None,
@@ -342,7 +342,7 @@ class Translator(object):
         with tqdm(total=None) as pbar:
             for batch in data_iter:
                 batch_data = self.translate_batch(
-                    batch, data.src_vocabs, attn_debug, explore
+                    batch, data.src_vocabs, attn_debug, explorer, collector
                 )
                 translations = xlation_builder.from_batch(batch_data)
 
@@ -516,10 +516,11 @@ class Translator(object):
         results["attention"] = random_sampler.attention
         return results
 
-    def translate_batch(self, batch, src_vocabs, attn_debug, explore):
+    def translate_batch(self, batch, src_vocabs, attn_debug, explorer, collector):
         """Translate a batch of sentences."""
         with torch.no_grad():
             if False and self.beam_size == 1:
+                assert False
                 return self._translate_random_sampling(
                     batch,
                     src_vocabs,
@@ -532,7 +533,8 @@ class Translator(object):
                 return self._translate_batch(
                     batch,
                     src_vocabs,
-                    explore,
+                    explorer,
+                    collector,
                     self.max_length,
                     min_length=self.min_length,
                     ratio=self.ratio,
@@ -580,14 +582,20 @@ class Translator(object):
 
         # Generator forward.
         if not self.copy_attn:
+            # RUNS
             if "std" in dec_attn:
                 attn = dec_attn["std"]
             else:
                 attn = None
             log_probs = self.model.generator(dec_out.squeeze(0))
+
+            # embed()
+            # sys.exit()
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
         else:
+            # DOES NOT RUN
+            assert False
             attn = dec_attn["copy"]
             scores = self.model.generator(dec_out.view(-1, dec_out.size(2)),
                                           attn.view(-1, attn.size(2)),
@@ -609,13 +617,15 @@ class Translator(object):
             log_probs = scores.squeeze(0).log()
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
+
         return log_probs, attn, dec_out
 
     def _translate_batch(
             self,
             batch,
             src_vocabs,
-            explore,
+            explorer,
+            collector,
             max_length,
             min_length=0,
             ratio=0.,
@@ -677,20 +687,17 @@ class Translator(object):
             memory_lengths=memory_lengths)
 
         ###
-        # explore = Explore(self.fields, self.data_pointer.examples)
         dec_out_memory = [[] for _ in range(batch.batch_size)]
+        batch_indexes = [[] for _ in range(batch.batch_size)]
 
         for step in range(max_length):
+            # print(step)
             # if step >= 0:
             #     embed()
             #     sys.exit(0)
 
-
-            # print("Step: {0}".format(step))
+            print("Step: {0}".format(step))
             decoder_input = beam.current_predictions.view(1, -1, 1)
-
-            # print(decoder_input.shape)
-            # print(decoder_input)
 
             log_probs, attn, dec_out = self._decode_and_generate(
                 decoder_input,
@@ -702,45 +709,59 @@ class Translator(object):
                 step=step,
                 batch_offset=beam._batch_offset)
 
-            for bo in beam._batch_offset.numpy():
-                dec_data = dec_out.squeeze(0).cpu().numpy()
-                dec_data = dec_data[bo*self.beam_size:(bo+1)*self.beam_size]
-                dec_out_memory[bo].append(dec_data)
+            dec_data = dec_out.squeeze(0).cpu().numpy()
+            # print("dec_data", dec_data.shape)
+            # print("beam._batch_offset", beam._batch_offset.shape)
 
-            stop = False
+            # ADVANCE
+            prevv = beam._batch_index.cpu().numpy().shape
+            beam.advance(log_probs, attn)
 
-            # if len(dec_out[0]) < 45:
-            #     stop = True
+            # STORE DEC_OUT
+            dec_data = dec_out.squeeze(0).cpu().numpy()
+            assert beam._batch_offset.numpy().shape[0] == dec_data.shape[0]//self.beam_size
+            for bo_idx, bo in enumerate(beam._batch_offset.numpy()):
+                dec_data_beams = dec_data[bo_idx*self.beam_size:(bo_idx+1)*self.beam_size]
+                assert dec_data_beams.shape[0] == self.beam_size
+                # if dec_data_beams.shape[0] != self.beam_size:
+                #     embed()
+                #     sys.exit(0)
+                dec_out_memory[bo].append(dec_data_beams)
+            # print("dec_data", dec_data.shape)
+            # print("beam._batch_offset", beam._batch_offset.shape)
+
+            # if step == 10:
             #     embed()
             #     sys.exit(0)
 
-            # print("dec_out", dec_out.shape)
+            # # STORE _batch_index
+            batch_index_data = beam._batch_index.cpu().numpy()
+            assert beam._batch_offset.numpy().shape[0] == batch_index_data.shape[0]
+            for bo_idx, bo in enumerate(beam._batch_offset.numpy()):
+                batch_index_beams = batch_index_data[bo_idx] - (bo_idx*self.beam_size)
+                batch_indexes[bo].append(batch_index_beams)
 
-            # print(log_probs.shape)
-            # print(log_probs)
-            # print(attn.shape)
-            # print(attn)
 
-            beam.advance(log_probs, attn)
+            # Update finished
             any_beam_is_finished = beam.is_finished.any()
-            # print(any_beam_is_finished)
-
-
             if any_beam_is_finished:
-                # print(",", beam.alive_seq.shape)
-                beam.update_finished(stop=stop)
-                # print(",", beam.alive_seq.shape)
+                beam.update_finished()
 
-                # print("\t", [len(n) for n in beam.predictions])
-                # if [len(n) for n in beam.predictions].count(0) == 2:
-                #     embed()
-                #     sys.exit(0)                    
-                
 
-                if beam.done:
-                    # embed()
-                    # sys.exit(0)
-                    break
+            # if step == 9:
+            #     embed()
+            #     sys.exit(0)
+
+            # # STORE _batch_index
+            # batch_index_data = beam._batch_index.cpu().numpy()
+            # for bo in beam._batch_offset.numpy():
+            #     batch_index_beams = batch_index_data[bo] - (bo*self.beam_size)
+            #     batch_indexes[bo].append(batch_index_beams)
+
+            if any_beam_is_finished and beam.done:
+                break
+
+            # print(step, beam._batch_index.cpu().numpy().shape, prevv)
 
             select_indices = beam.current_origin
 
@@ -769,7 +790,8 @@ class Translator(object):
             self.model.decoder.map_state(
                 lambda state, dim: state.index_select(dim, select_indices))
 
-            # if step == 1:
+            # print(step, beam._batch_index.cpu().numpy().shape)
+            # if step == 10:
             #     embed()
             #     sys.exit(0)
 
@@ -779,7 +801,17 @@ class Translator(object):
         results["predictions"] = beam.predictions
         results["attention"] = beam.attention
 
-        explore.collect_data(beam, batch, dec_out_memory)
+        if explorer:
+            # explorer.collect_best_bleu(beam, batch)
+            dec_data = {
+                'dec_out': dec_out_memory,
+                'index': batch_indexes
+            }
+            s_time = time.time()
+            explorer.collect_data(beam, batch, dec_data)
+            print("t: ", time.time() - s_time)
+
+        sys.exit(0)
 
         return results
 

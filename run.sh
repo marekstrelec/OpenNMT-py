@@ -5,21 +5,22 @@
 # TGT_NAME=dev.5.de-en.en
 # OUT_NAME=dev.5.out
 
-FOLDER=dataset/iwslt14/dev
-SRC_NAME=zz_valid.5.de
-TGT_NAME=zz_valid.5.en
-OUT_NAME=zz_valid.5.out
-
 # FOLDER=dataset/iwslt14/dev
 # SRC_NAME=valid.1k.de
 # TGT_NAME=valid.1k.en
 # OUT_NAME=valid.1k.out
 
+FOLDER=dataset/iwslt14/train
+SRC_NAME=train.50k.de
+TGT_NAME=train.50k.en
+OUT_NAME=train.50k.out
 
-python translate.py \
+
+python3 translate.py \
     -model models/iwslt-brnn2.s131_acc_62.71_ppl_7.74_e20.pt \
     -src ${FOLDER}/${SRC_NAME} \
     -tgt ${FOLDER}/${TGT_NAME} \
     -output ${FOLDER}/${OUT_NAME} \
     -replace_unk \
-    -beam_size 5
+    -beam_size 5 \
+    -gpu 0
