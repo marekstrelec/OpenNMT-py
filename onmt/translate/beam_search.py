@@ -1,9 +1,11 @@
 
 import sys
+import os
 import torch
 
 from onmt.translate.decode_strategy import DecodeStrategy
 
+import numpy as np
 from IPython import embed
 
 
@@ -198,6 +200,11 @@ class BeamSearch(DecodeStrategy):
                     self._prev_penalty = self.global_scorer.cov_penalty(
                         self._coverage, beta=self.global_scorer.beta).view(
                             _B, self.beam_size)
+
+        # found = False
+        # if found or np.any(self.topk_ids.view(_B * self.beam_size, 1).cpu().numpy()==3):
+        #     embed()
+        #     found = True
 
         if self._vanilla_cov_pen:
             # DOES NOT RUN

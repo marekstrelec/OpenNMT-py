@@ -587,6 +587,7 @@ class Translator(object):
                 attn = dec_attn["std"]
             else:
                 attn = None
+
             log_probs = self.model.generator(dec_out.squeeze(0))
 
             # embed()
@@ -696,7 +697,7 @@ class Translator(object):
             #     embed()
             #     sys.exit(0)
 
-            print("Step: {0}".format(step))
+            # print("Step: {0}".format(step))
             decoder_input = beam.current_predictions.view(1, -1, 1)
 
             log_probs, attn, dec_out = self._decode_and_generate(
@@ -708,10 +709,6 @@ class Translator(object):
                 src_map=src_map,
                 step=step,
                 batch_offset=beam._batch_offset)
-
-            dec_data = dec_out.squeeze(0).cpu().numpy()
-            # print("dec_data", dec_data.shape)
-            # print("beam._batch_offset", beam._batch_offset.shape)
 
             # ADVANCE
             prevv = beam._batch_index.cpu().numpy().shape
@@ -745,7 +742,11 @@ class Translator(object):
             # Update finished
             any_beam_is_finished = beam.is_finished.any()
             if any_beam_is_finished:
+                # embed()
+
                 beam.update_finished()
+
+                # sys.exit()
 
 
             # if step == 9:
@@ -791,7 +792,7 @@ class Translator(object):
                 lambda state, dim: state.index_select(dim, select_indices))
 
             # print(step, beam._batch_index.cpu().numpy().shape)
-            # if step == 10:
+            # if step == 0:
             #     embed()
             #     sys.exit(0)
 
@@ -807,11 +808,12 @@ class Translator(object):
                 'dec_out': dec_out_memory,
                 'index': batch_indexes
             }
-            s_time = time.time()
-            explorer.collect_data(beam, batch, dec_data)
-            print("t: ", time.time() - s_time)
+            # embed()
+            # sys.exit(0)
 
-        sys.exit(0)
+            # s_time = time.time()
+            explorer.collect_data(beam, batch, dec_data, self.model)
+            # print("t: ", time.time() - s_time)
 
         return results
 

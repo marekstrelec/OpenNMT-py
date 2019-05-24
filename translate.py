@@ -25,7 +25,7 @@ logger = None
 
 def explore(opt, shard_pairs):
     # paths
-    working_dir = Path("collected")
+    working_dir = Path("/local/scratch/ms2518/collected")
     # working_dir_small = working_dir.joinpath("small")
     working_dir_large = working_dir.joinpath("explore")
     # working_dir_small.mkdir(exist_ok=True, parents=True)
@@ -40,6 +40,8 @@ def explore(opt, shard_pairs):
     opt.beam_size = 5
     opt.n_best = 5
 
+    # print(opt)
+
     # translators
     translator_small = build_translator(opt, report_score=False)
     translator_large = build_translator(opt_large, report_score=False)
@@ -50,6 +52,12 @@ def explore(opt, shard_pairs):
 
 
     for i, (src_shard, tgt_shard) in enumerate(shard_pairs):
+        # if i < 128:
+        #     continue
+
+        # if i < 8:
+        #     continue
+
         if logger:
             logger.info("Translating shard {0}".format(i))
 
@@ -65,11 +73,11 @@ def explore(opt, shard_pairs):
             attn_debug=opt.attn_debug,
         )
 
-        dump_path = explorer_large.dump_data()
-        explorer_large.reset_and_iterate()
-        print(dump_path)
+        explorer_large.dump_data_and_iterate_if(size=100)
 
-        print(time.time() - s_time)
+        # sys.exit(0)
+
+        # print(time.time() - s_time)
 
         # collector = Collector(translator_large.fields)
         # collector.process_collection(Path("collected/large/e0.pickle"), Path("collected/data/e0.pickle"))
@@ -85,7 +93,8 @@ def explore(opt, shard_pairs):
         #     attn_debug=opt.attn_debug,
         # )
 
-        sys.exit(0)
+    # dump the rest
+    explorer_large.dump_data_and_iterate_if(size=1)
 
 
 

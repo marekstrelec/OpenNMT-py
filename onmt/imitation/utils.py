@@ -5,6 +5,8 @@ import numpy as np
 import onmt.imitation.bleu as bleu
 import pickle
 
+import torch
+
 from nltk.translate.bleu_score import sentence_bleu
 from pathlib import Path
 from collections import defaultdict, Counter
@@ -27,8 +29,7 @@ class Explorer(object):
             raise Exception("{0} does not exist!".format(str(self.working_dirpath)))
 
         self.collect_iter = 0
-        self.beam_data = []
-        self.dec_data = []
+        self.collected_data = []
 
         self.acc_bleu = []
 
@@ -45,23 +46,28 @@ class Explorer(object):
         all_words = []
         words = []
         ids = []
+        all_ids = []
+        stopped = False
         for n in seq:
             w = self.idtoword(n, field=field)
             all_words.append(w)
+            all_ids.append(n)
 
             if n in ignore:
                 continue
 
             if n in stop_at:
-                break
+                stopped = True
 
-            words.append(w)
-            ids.append(n)
+            if not stopped:
+                words.append(w)
+                ids.append(n)
 
         return {
             'words': words,
             'ids': ids,
             'all_words': all_words,
+            'all_ids': all_ids,
             'orig_len': len(seq)
         }
 
@@ -134,6 +140,7 @@ class Explorer(object):
                     "stats": cooked_hypot,
                     "ref": r['words'],
                     "hyp": hs[ii]['ids'],
+                    "all_hyp": hs[ii]['all_ids'],
                     "hyp_replaced": hypot_replaced,
                     "orig_len": hs[ii]['orig_len'],
                     "all_words": hs[ii]['all_words']
@@ -149,7 +156,7 @@ class Explorer(object):
         return data
 
 
-    def collect_data(self, beam, batch, dec_data, ngrams=2):
+    def collect_data(self, beam, batch, dec_data, model, ngrams=2):
         if 'data' not in self.raw_src:
             raise Exception("Data missing in raw_src!")
 
@@ -163,9 +170,18 @@ class Explorer(object):
             origins = []  # [B, T]
             # collect a lists of indexes that represent beam origins
             for beam_beam_idx in range(len(new_batch_beam_data[bth])):
-                hyp_length = len(new_batch_beam_data[bth][beam_beam_idx][1]['hyp'])
+                hyp_length = len(new_batch_beam_data[bth][beam_beam_idx][1]['all_words'])
+                t_end = hyp_length - 1  # -1 for index
 
-                t_end = hyp_length - 1 + 1  # -1 for index, +1 to add <s>
+                # eos_tokenid = 5
+                # +1 if the last token is </s>
+                # if new_batch_beam_data[bth][beam_beam_idx][1]['hyp'][-1] == eos_tokenid:
+                #    t_end += 1
+
+                if t_end >= len(dec_data['index'][bth]):
+                    embed()
+                    raise Exception("Invalid timestep! (dec_data['index'], bth:{0}, t:{1})".format(bth, t_end))
+
                 b_idx = new_batch_beam_data[bth][beam_beam_idx][0]
                 res = [b_idx]
                 for t in range(t_end, -1, -1):
@@ -180,7 +196,7 @@ class Explorer(object):
 
             # collect decoder states and labels
             collected_data = []
-            lengths = [len(n[1]['hyp']) for n in new_batch_beam_data[bth]]
+            lengths = [len(n[1]['all_hyp']) for n in new_batch_beam_data[bth]]
             for t in range(max(lengths)):
                 states = defaultdict(list)
                 for b in range(len(origins)):
@@ -189,7 +205,7 @@ class Explorer(object):
 
                     # add to states dict
                     key = origins[b][t]
-                    val = (new_batch_beam_data[bth][b][1]['hyp'][t], new_batch_beam_data[bth][b][1]['hyp_replaced'][t])
+                    val = (new_batch_beam_data[bth][b][1]['all_hyp'][t], new_batch_beam_data[bth][b][1]['all_words'][t])
                     states[key].append(val)
 
                 # add to collected data
@@ -207,35 +223,43 @@ class Explorer(object):
 
             # log functions
             def foo():
-                for n in range(5):
-                    print(" ".join(new_batch_beam_data[bth][n][1]['hyp_replaced']))
+                for n in range(self.collect_n_best):
+                    print(" ".join(new_batch_beam_data[bth][n][1]['all_words']))
 
             def bar():
-                for n in range(54):
-                    for m in collected_data[n]:
+                for n in collected_data:
+                    for m in n:
                         print(list(Counter(m['vals']).items()), end=" --- ")
                     print()
 
+            def trydec():
+                t = len(collected_data) - 1
+                qq = collected_data[t][0]['dec'].reshape((1, 500))
+                qqt = torch.from_numpy(qq).float().to('cuda')
+                score = model.generator(qqt)
 
-        # embed()
-        # sys.exit(0)
-
-        dump_path = self.working_dirpath.joinpath("e{0}.pickle".format("0"))
-        with open(str(dump_path), "wb") as f:
-            pickle.dump(collected_data_batches, f)
+                print(np.argmax(score.cpu().numpy()[0]))
 
 
-    def dump_data(self):
+            # embed()
+            # sys.exit(0)
+
+
+        # add to the global storage
+        self.collected_data.append(collected_data_batches)
+
+    def dump_data_and_iterate_if(self, size):
+        if len(self.collected_data) < size:
+            return
+
         dump_path = self.working_dirpath.joinpath("e{0}.pickle".format(self.collect_iter))
         with open(str(dump_path), "wb") as f:
-            pickle.dump((self.beam_data, self.dec_data), f)
+            pickle.dump(self.collected_data, f)
+
+        self.collected_data = []
+        self.collect_iter += 1
 
         return dump_path
-
-    def reset_and_iterate(self):
-        self.beam_data = []
-        self.dec_data = []
-        self.collect_iter += 1
 
     def collect_best_bleu(self, beam, batch, ngrams=2):
         new_batch_beam_data = self.collect_beam_data(beam, batch, ngrams)

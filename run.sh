@@ -10,10 +10,15 @@
 # TGT_NAME=valid.1k.en
 # OUT_NAME=valid.1k.out
 
+# FOLDER=dataset/iwslt14/train
+# SRC_NAME=train.50k.de
+# TGT_NAME=train.50k.en
+# OUT_NAME=train.50k.out
+
 FOLDER=dataset/iwslt14/train
-SRC_NAME=train.50k.de
-TGT_NAME=train.50k.en
-OUT_NAME=train.50k.out
+SRC_NAME=train.160k.de
+TGT_NAME=train.160k.en
+OUT_NAME=train.160k.out
 
 
 python3 translate.py \
