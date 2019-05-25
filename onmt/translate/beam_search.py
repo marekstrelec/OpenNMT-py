@@ -1,6 +1,7 @@
 
 import sys
 import os
+import time
 import torch
 
 from onmt.translate.decode_strategy import DecodeStrategy
@@ -124,7 +125,7 @@ class BeamSearch(DecodeStrategy):
         return self.select_indices.view(self.batch_size, self.beam_size)\
             .fmod(self.beam_size)
 
-    def advance(self, log_probs, attn):
+    def advance(self, log_probs, attn, dec_out, guide, guide_alpha, explorer, guide_batch_size=64):
         vocab_size = log_probs.size(-1)
 
         # using integer division to get an integer _B without casting
@@ -141,6 +142,20 @@ class BeamSearch(DecodeStrategy):
         # force the output to be longer than self.min_length
         step = len(self)
         self.ensure_min_length(log_probs)
+
+        # Multiply by guide probabilities
+        with torch.no_grad():
+            for batch_idx in range(int(np.ceil(dec_out.shape[1] / guide_batch_size))):
+                idx_from = batch_idx*guide_batch_size
+                idx_to = (batch_idx+1)*guide_batch_size
+                data = dec_out[0][idx_from:idx_to]
+                pred = guide(data)
+
+                # if step == 4:
+                #     embed()
+                #     sys.exit(0)
+
+                log_probs[idx_from:idx_to] += guide_alpha * pred
 
         # Multiply probs by the beam probability.
         log_probs += self.topk_log_probs.view(_B * self.beam_size, 1)

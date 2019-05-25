@@ -179,7 +179,6 @@ class Explorer(object):
                 #    t_end += 1
 
                 if t_end >= len(dec_data['index'][bth]):
-                    embed()
                     raise Exception("Invalid timestep! (dec_data['index'], bth:{0}, t:{1})".format(bth, t_end))
 
                 b_idx = new_batch_beam_data[bth][beam_beam_idx][0]

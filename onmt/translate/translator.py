@@ -33,6 +33,7 @@ def build_translator(opt, report_score=True, logger=None, out_file=None):
     fields, model, model_opt = load_test_model(opt)
 
     # print(model_opt)
+    # sys.exit(0)
 
     scorer = onmt.translate.GNMTGlobalScorer.from_opt(opt)
 
@@ -274,7 +275,8 @@ class Translator(object):
             self,
             src,
             explorer,
-            collector,
+            guide,
+            guide_alpha,
             tgt=None,
             src_dir=None,
             batch_size=None,
@@ -342,7 +344,7 @@ class Translator(object):
         with tqdm(total=None) as pbar:
             for batch in data_iter:
                 batch_data = self.translate_batch(
-                    batch, data.src_vocabs, attn_debug, explorer, collector
+                    batch, data.src_vocabs, attn_debug, explorer, guide, guide_alpha
                 )
                 translations = xlation_builder.from_batch(batch_data)
 
@@ -516,7 +518,7 @@ class Translator(object):
         results["attention"] = random_sampler.attention
         return results
 
-    def translate_batch(self, batch, src_vocabs, attn_debug, explorer, collector):
+    def translate_batch(self, batch, src_vocabs, attn_debug, explorer, guide, guide_alpha):
         """Translate a batch of sentences."""
         with torch.no_grad():
             if False and self.beam_size == 1:
@@ -534,7 +536,8 @@ class Translator(object):
                     batch,
                     src_vocabs,
                     explorer,
-                    collector,
+                    guide,
+                    guide_alpha,
                     self.max_length,
                     min_length=self.min_length,
                     ratio=self.ratio,
@@ -626,7 +629,8 @@ class Translator(object):
             batch,
             src_vocabs,
             explorer,
-            collector,
+            guide,
+            guide_alpha,
             max_length,
             min_length=0,
             ratio=0.,
@@ -711,8 +715,7 @@ class Translator(object):
                 batch_offset=beam._batch_offset)
 
             # ADVANCE
-            prevv = beam._batch_index.cpu().numpy().shape
-            beam.advance(log_probs, attn)
+            beam.advance(log_probs, attn, dec_out, guide, guide_alpha, explorer)
 
             # STORE DEC_OUT
             dec_data = dec_out.squeeze(0).cpu().numpy()
@@ -720,12 +723,7 @@ class Translator(object):
             for bo_idx, bo in enumerate(beam._batch_offset.numpy()):
                 dec_data_beams = dec_data[bo_idx*self.beam_size:(bo_idx+1)*self.beam_size]
                 assert dec_data_beams.shape[0] == self.beam_size
-                # if dec_data_beams.shape[0] != self.beam_size:
-                #     embed()
-                #     sys.exit(0)
                 dec_out_memory[bo].append(dec_data_beams)
-            # print("dec_data", dec_data.shape)
-            # print("beam._batch_offset", beam._batch_offset.shape)
 
             # if step == 10:
             #     embed()
@@ -738,50 +736,24 @@ class Translator(object):
                 batch_index_beams = batch_index_data[bo_idx] - (bo_idx*self.beam_size)
                 batch_indexes[bo].append(batch_index_beams)
 
-
             # Update finished
             any_beam_is_finished = beam.is_finished.any()
             if any_beam_is_finished:
-                # embed()
-
                 beam.update_finished()
-
-                # sys.exit()
-
-
-            # if step == 9:
-            #     embed()
-            #     sys.exit(0)
-
-            # # STORE _batch_index
-            # batch_index_data = beam._batch_index.cpu().numpy()
-            # for bo in beam._batch_offset.numpy():
-            #     batch_index_beams = batch_index_data[bo] - (bo*self.beam_size)
-            #     batch_indexes[bo].append(batch_index_beams)
 
             if any_beam_is_finished and beam.done:
                 break
 
-            # print(step, beam._batch_index.cpu().numpy().shape, prevv)
-
             select_indices = beam.current_origin
-
 
 
             if any_beam_is_finished:
                 # Reorder states.
                 if isinstance(memory_bank, tuple):
-                    # print("111")
                     memory_bank = tuple(x.index_select(1, select_indices)
                                         for x in memory_bank)
-                    # embed()
-                    # sys.exit(0)
                 else:
-                    # print("222")
                     memory_bank = memory_bank.index_select(1, select_indices)
-                    # print(select_indices.shape)
-                    # embed()
-                    # sys.exit(0)
 
                 memory_lengths = memory_lengths.index_select(0, select_indices)
 
