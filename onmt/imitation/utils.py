@@ -122,6 +122,7 @@ class Explorer(object):
         hypots, refs, attns = self.process_beam(beam, batch)
 
         data = []
+        batch_indexes = batch.indices.cpu().numpy()
         for idx, (r, hs, atts) in enumerate(zip(refs, hypots, attns)):
             assert len(hs) == len(atts)
 
@@ -129,7 +130,7 @@ class Explorer(object):
             cooked_refs = bleu.cook_refs([r['words']], ngrams)
             beam_data = []
             for ii in range(len(hs)):
-                batch_index = batch.indices.cpu().numpy()[idx]
+                batch_index = batch_indexes[idx]
                 hypot_replaced = self.replaced_unks(hs[ii]['words'], atts[ii], batch_index)
 
                 cooked_hypot = bleu.cook_test(hypot_replaced, cooked_refs, ngrams)
@@ -228,6 +229,8 @@ class Explorer(object):
             def bar():
                 for n in collected_data:
                     for m in n:
+                        # if 'conf' in m:
+                        print(m['conf'], end=" ")
                         print(list(Counter(m['vals']).items()), end=" --- ")
                     print()
 
@@ -240,9 +243,30 @@ class Explorer(object):
                 print(np.argmax(score.cpu().numpy()[0]))
 
 
-            # embed()
-            # sys.exit(0)
+            # add confidence
+            best_prediction_logscore = beam.predictions[bth][0].cpu().numpy()
+            min_range = min(len(best_prediction_logscore), len(collected_data_batches[bth]))
+            t = 0
+            while t < min_range:
+                stop = False
+                for b in collected_data_batches[bth][t]:
+                    for v in b['vals']:
+                        if v[0] != best_prediction_logscore[t]:
+                            stop = True
+                            break
+                    if stop:
+                        break
+                if stop:
+                    break
 
+                for b in collected_data_batches[bth][t]:
+                    b['conf'] = 0.
+                t += 1
+
+            # add confidence - set therest to 1.
+            for t2 in range(t, len(collected_data_batches[bth])):
+                for b in collected_data_batches[bth][t2]:
+                    b['conf'] = 1.
 
         # add to the global storage
         self.collected_data.append(collected_data_batches)

@@ -16,33 +16,22 @@ class Net(nn.Module):
     def __init__(self, input_size, output_size):
         super(Net, self).__init__()
 
-        # DROPOUT!
-
         self.input_size = input_size
         self.output_size = output_size
         self.fc1 = nn.Linear(input_size, 500)
-        self.fc2 = nn.Linear(500, 1000)
-        self.fc3 = nn.Linear(500, 1000)
-        self.fc4 = nn.Linear(1000, output_size)
+        self.fc2 = nn.Linear(500, output_size)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = self.fc4(x)
+        x = self.fc2(x)
         return F.log_softmax(x, dim=1)
-
     
-def train_model(args, loss_fn, model, device, train_loader, optimizer, epoch, autoencoder, dataset_iter):
+def train_model(args, loss_fn, model, device, train_loader, optimizer, epoch, dataset_iter):
     assert loss_fn in ['kl', 'nll']
 
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
-
-        if autoencoder:
-            data, _ = autoencoder(data)
-
         optimizer.zero_grad()
         output = model(data)
 
@@ -65,7 +54,7 @@ def train_model(args, loss_fn, model, device, train_loader, optimizer, epoch, au
             )
             sys.stdout.flush()
 
-def test_model(args, loss_fn, model, device, test_loader, autoencoder):
+def test_model(args, loss_fn, model, device, test_loader):
     assert loss_fn in ['kl', 'nll']
 
     model.eval()
@@ -74,10 +63,6 @@ def test_model(args, loss_fn, model, device, test_loader, autoencoder):
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
-
-            if autoencoder:
-                data, _ = autoencoder(data)
-
             output = model(data)
 
             if loss_fn == "kl":

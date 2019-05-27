@@ -27,13 +27,13 @@ logger = None
 
 
 def explore(opt, shard_pairs):
-    # output dir for collected data
-    explore_dirout = Path(opt.explore_dirout)
-    explore_dirout.mkdir(exist_ok=True, parents=True)
-
     # opt_large
     opt.beam_size = opt.il_beamsize
-    opt.n_best = opt.explore_nbest
+
+    if opt.explore:
+        opt.n_best = opt.il_beamsize
+    else:
+        opt.n_best = 1
 
     # translators
     translator_large = build_translator(opt, report_score=False)
@@ -42,42 +42,49 @@ def explore(opt, shard_pairs):
     INPUT_SIZE = 500
     OUTPUT_SIZE = 24725
     device = torch.device("cuda")
-    model = Net(input_size=INPUT_SIZE, output_size=OUTPUT_SIZE).to(device)
-    model.load_state_dict(torch.load(opt.il_model))
-    model.eval()
+
+    guide = None
+    if opt.il_model:
+        guide = Net(input_size=INPUT_SIZE, output_size=OUTPUT_SIZE).to(device)
+        guide.load_state_dict(torch.load(opt.il_model))
+        guide.eval()
     
     # explorer
-    explorer_large = Explorer('large', translator_large.fields, translator_large.raw_src, explore_dirout, collect_n_best=opt.explore_nbest)
+    explorer_large = None
+    if opt.explore:
+        # output dir for collected data
+        explore_dirout = Path(opt.explore_dirout)
+        explore_dirout.mkdir(exist_ok=True, parents=True)
 
+        explorer_large = Explorer('large', translator_large.fields, translator_large.raw_src, explore_dirout, collect_n_best=opt.explore_nbest)
 
     for i, (src_shard, tgt_shard) in enumerate(shard_pairs):
         # if i < 128:
-        #     continue
-
-        # if i < 8:
         #     continue
 
         if logger:
             logger.info("Translating shard {0}".format(i))
 
         s_time = time.time()
-        logger.info("(step 1) explore)")
+        logger.info("Explore")
         translator_large.translate(
             src=src_shard,
             tgt=tgt_shard,
             explorer=explorer_large,
-            guide=model,
+            guide=guide,
             guide_alpha=opt.il_alpha,
             src_dir=opt.src_dir,
             batch_size=opt.batch_size,
             attn_debug=opt.attn_debug,
         )
+        logger.info("Done. t={0:.2f}s".format(time.time() - s_time))
 
-        explorer_large.dump_data_and_iterate_if(size=100)
+        if opt.explore:
+            explorer_large.dump_data_and_iterate_if(size=100)
 
-    # dump the rest
-    explorer_large.dump_data_and_iterate_if(size=1)
-
+    if opt.explore:
+        # dump the rest
+        explorer_large.dump_data_and_iterate_if(size=1)
 
 
 def normal(opt, shard_pairs):

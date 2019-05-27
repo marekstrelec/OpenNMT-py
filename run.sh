@@ -13,11 +13,6 @@ SRC_NAME=train.160k.de
 TGT_NAME=train.160k.en
 OUT_NAME=train.160k.out
 
-# FOLDER=dataset/euro7/dev
-# SRC_NAME=dev.5.de-en.de
-# TGT_NAME=dev.5.de-en.en
-# OUT_NAME=dev.5.out
-
 # FOLDER=dataset/iwslt14/dev
 # SRC_NAME=valid.1k.de
 # TGT_NAME=valid.1k.en
@@ -40,12 +35,13 @@ python3 translate.py \
     -tgt ${FOLDER}/${TGT_NAME} \
     -output ${FOLDER}/${OUT_NAME} \
     -replace_unk \
-    -beam_size 25 \
+    -beam_size 30 \
     -gpu 0 \
-    --il_shardsize 50 \
-    --il_beamsize 25 \
-    --il_model policy_models/run${RUN_IDX}/${MODEL_NAME}.model \
+    --il_shardsize 100 \
+    --il_beamsize 30 \
     --il_alpha 0.5 \
+    --explore \
+    --explore_nbest 5 \
     --explore_dirout /local/scratch/ms2518/collected/run${RUN_NEXT_IDX}/ \
-    --explore_nbest 25 \
+    # --il_model policy_models/run${RUN_IDX}/${MODEL_NAME}.model
     

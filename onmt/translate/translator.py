@@ -21,7 +21,6 @@ from onmt.utils.misc import tile, set_random_seed
 from onmt.modules.copy_generator import collapse_copy_scores
 
 from IPython import embed
-from tqdm import tqdm
 
 
 def build_translator(opt, report_score=True, logger=None, out_file=None):
@@ -299,8 +298,6 @@ class Translator(object):
             * all_predictions is a list of `batch_size` lists
                 of `n_best` predictions
         """
-        print("beam_size:", self.beam_size)
-
         if batch_size is None:
             raise ValueError("batch_size must be set")
 
@@ -341,59 +338,56 @@ class Translator(object):
 
         start_time = time.time()
 
-        with tqdm(total=None) as pbar:
-            for batch in data_iter:
-                batch_data = self.translate_batch(
-                    batch, data.src_vocabs, attn_debug, explorer, guide, guide_alpha
-                )
-                translations = xlation_builder.from_batch(batch_data)
+        for batch in data_iter:
+            batch_data = self.translate_batch(
+                batch, data.src_vocabs, attn_debug, explorer, guide, guide_alpha
+            )
+            translations = xlation_builder.from_batch(batch_data)
 
-                # embed()
+            # embed()
 
-                for trans in translations:
-                    all_scores += [trans.pred_scores[:self.n_best]]
-                    pred_score_total += trans.pred_scores[0]
-                    pred_words_total += len(trans.pred_sents[0])
-                    if tgt is not None:
-                        gold_score_total += trans.gold_score
-                        gold_words_total += len(trans.gold_sent) + 1
+            for trans in translations:
+                all_scores += [trans.pred_scores[:self.n_best]]
+                pred_score_total += trans.pred_scores[0]
+                pred_words_total += len(trans.pred_sents[0])
+                if tgt is not None:
+                    gold_score_total += trans.gold_score
+                    gold_words_total += len(trans.gold_sent) + 1
 
-                    n_best_preds = [" ".join(pred)
-                                    for pred in trans.pred_sents[:self.n_best]]
-                    all_predictions += [n_best_preds]
-                    self.out_file.write('\n'.join(n_best_preds) + '\n')
-                    self.out_file.flush()
+                n_best_preds = [" ".join(pred)
+                                for pred in trans.pred_sents[:self.n_best]]
+                all_predictions += [n_best_preds]
+                self.out_file.write('\n'.join(n_best_preds) + '\n')
+                self.out_file.flush()
 
-                    if self.verbose:
-                        sent_number = next(counter)
-                        output = trans.log(sent_number)
-                        if self.logger:
-                            self.logger.info(output)
-                        else:
-                            os.write(1, output.encode('utf-8'))
-
-                    if attn_debug:
-                        preds = trans.pred_sents[0]
-                        preds.append('</s>')
-                        attns = trans.attns[0].tolist()
-                        if self.data_type == 'text':
-                            srcs = trans.src_raw
-                        else:
-                            srcs = [str(item) for item in range(len(attns[0]))]
-                        header_format = "{:>10.10} " + "{:>10.7} " * len(srcs)
-                        row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
-                        output = header_format.format("", *srcs) + '\n'
-                        for word, row in zip(preds, attns):
-                            max_index = row.index(max(row))
-                            row_format = row_format.replace(
-                                "{:>10.7f} ", "{:*>10.7f} ", max_index + 1)
-                            row_format = row_format.replace(
-                                "{:*>10.7f} ", "{:>10.7f} ", max_index)
-                            output += row_format.format(word, *row) + '\n'
-                            row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
+                if self.verbose:
+                    sent_number = next(counter)
+                    output = trans.log(sent_number)
+                    if self.logger:
+                        self.logger.info(output)
+                    else:
                         os.write(1, output.encode('utf-8'))
 
-                pbar.update(1)
+                if attn_debug:
+                    preds = trans.pred_sents[0]
+                    preds.append('</s>')
+                    attns = trans.attns[0].tolist()
+                    if self.data_type == 'text':
+                        srcs = trans.src_raw
+                    else:
+                        srcs = [str(item) for item in range(len(attns[0]))]
+                    header_format = "{:>10.10} " + "{:>10.7} " * len(srcs)
+                    row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
+                    output = header_format.format("", *srcs) + '\n'
+                    for word, row in zip(preds, attns):
+                        max_index = row.index(max(row))
+                        row_format = row_format.replace(
+                            "{:>10.7f} ", "{:*>10.7f} ", max_index + 1)
+                        row_format = row_format.replace(
+                            "{:*>10.7f} ", "{:>10.7f} ", max_index)
+                        output += row_format.format(word, *row) + '\n'
+                        row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
+                    os.write(1, output.encode('utf-8'))
 
         end_time = time.time()
 
@@ -780,12 +774,13 @@ class Translator(object):
                 'dec_out': dec_out_memory,
                 'index': batch_indexes
             }
-            # embed()
-            # sys.exit(0)
 
             # s_time = time.time()
             explorer.collect_data(beam, batch, dec_data, self.model)
             # print("t: ", time.time() - s_time)
+
+            # embed()
+            # sys.exit(0)
 
         return results
 

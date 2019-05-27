@@ -144,18 +144,19 @@ class BeamSearch(DecodeStrategy):
         self.ensure_min_length(log_probs)
 
         # Multiply by guide probabilities
-        with torch.no_grad():
-            for batch_idx in range(int(np.ceil(dec_out.shape[1] / guide_batch_size))):
-                idx_from = batch_idx*guide_batch_size
-                idx_to = (batch_idx+1)*guide_batch_size
-                data = dec_out[0][idx_from:idx_to]
-                pred = guide(data)
+        if guide:
+            with torch.no_grad():
+                for batch_idx in range(int(np.ceil(dec_out.shape[1] / guide_batch_size))):
+                    idx_from = batch_idx*guide_batch_size
+                    idx_to = (batch_idx+1)*guide_batch_size
+                    data = dec_out[0][idx_from:idx_to]
+                    pred = guide(data)
 
-                # if step == 4:
-                #     embed()
-                #     sys.exit(0)
+                    # if step == 4:
+                    #     embed()
+                    #     sys.exit(0)
 
-                log_probs[idx_from:idx_to] += guide_alpha * pred
+                    log_probs[idx_from:idx_to] += guide_alpha * pred
 
         # Multiply probs by the beam probability.
         log_probs += self.topk_log_probs.view(_B * self.beam_size, 1)

@@ -9,11 +9,12 @@ def imitation_opts(parser):
     parser.add('--il_shardsize', type=int, required=True)
     parser.add('--il_beamsize', type=int, required=True)
     
-    parser.add('--il_model', type=str, required=True)
+    parser.add('--il_model', type=str, required=False)
     parser.add('--il_alpha', type=float, required=True)
 
-    parser.add('--explore_dirout', type=str, required=True)
-    parser.add('--explore_nbest', type=int, required=True)
+    parser.add('--explore', action='store_true', default=False)
+    parser.add('--explore_dirout', type=str, default=None)
+    parser.add('--explore_nbest', type=int, default=None)
 
 
 def config_opts(parser):
