@@ -36,7 +36,10 @@ class ExploreDataset(data.Dataset):
                     for t in b:
                         for origin in t:
                             X.append(origin['dec'])
-                            Y.append(origin['vals'])
+                            Y.append({
+                                'dist': origin['vals'],
+                                'conf': origin['conf']
+                            })
 
         print("\t(Loaded in {0:.2f}s)".format(time.time() - s_time))
 
@@ -54,7 +57,8 @@ class ExploreDataset(data.Dataset):
         'Generates one sample of data'
 
         X = self.data['inputs'][index]
-        targets = self.data['targets'][index]
+        targets = self.data['targets'][index]['dist']
+        conf_score = np.asarray(self.data['targets'][index]['conf'], dtype=np.float32)
         
         vec = np.zeros(self.output_size, dtype=np.float32)
         cnt = Counter(targets)
@@ -69,4 +73,4 @@ class ExploreDataset(data.Dataset):
             for k, v in cnt.items():
                 vec[k[0]] = v / denom
 
-        return X, vec
+        return X, (vec, conf_score)

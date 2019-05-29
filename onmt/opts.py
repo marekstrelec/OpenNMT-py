@@ -10,7 +10,8 @@ def imitation_opts(parser):
     parser.add('--il_beamsize', type=int, required=True)
     
     parser.add('--il_model', type=str, required=False)
-    parser.add('--il_alpha', type=float, required=True)
+    parser.add('--il_alpha', type=float, required=False)
+    parser.add('--il_mode', type=str, required=False)
 
     parser.add('--explore', action='store_true', default=False)
     parser.add('--explore_dirout', type=str, default=None)

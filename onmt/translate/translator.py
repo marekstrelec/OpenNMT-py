@@ -275,7 +275,6 @@ class Translator(object):
             src,
             explorer,
             guide,
-            guide_alpha,
             tgt=None,
             src_dir=None,
             batch_size=None,
@@ -340,7 +339,7 @@ class Translator(object):
 
         for batch in data_iter:
             batch_data = self.translate_batch(
-                batch, data.src_vocabs, attn_debug, explorer, guide, guide_alpha
+                batch, data.src_vocabs, attn_debug, explorer, guide
             )
             translations = xlation_builder.from_batch(batch_data)
 
@@ -512,7 +511,7 @@ class Translator(object):
         results["attention"] = random_sampler.attention
         return results
 
-    def translate_batch(self, batch, src_vocabs, attn_debug, explorer, guide, guide_alpha):
+    def translate_batch(self, batch, src_vocabs, attn_debug, explorer, guide):
         """Translate a batch of sentences."""
         with torch.no_grad():
             if False and self.beam_size == 1:
@@ -531,7 +530,6 @@ class Translator(object):
                     src_vocabs,
                     explorer,
                     guide,
-                    guide_alpha,
                     self.max_length,
                     min_length=self.min_length,
                     ratio=self.ratio,
@@ -624,7 +622,6 @@ class Translator(object):
             src_vocabs,
             explorer,
             guide,
-            guide_alpha,
             max_length,
             min_length=0,
             ratio=0.,
@@ -709,7 +706,7 @@ class Translator(object):
                 batch_offset=beam._batch_offset)
 
             # ADVANCE
-            beam.advance(log_probs, attn, dec_out, guide, guide_alpha, explorer)
+            beam.advance(log_probs, attn, dec_out, guide, explorer)
 
             # STORE DEC_OUT
             dec_data = dec_out.squeeze(0).cpu().numpy()

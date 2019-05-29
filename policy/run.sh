@@ -4,4 +4,7 @@
 # time python3 policy/train_policy.py --working_dir policy_models/run1 > out.log 2> out.err
 
 # time python3 policy/train_policy.py --working_dir policy_models/run1 --load policy_models/run0/21.1558821372 --start_epoch 1 --nooptload --epochs 10 > out.log 2> out.err
-time python3 policy/train_policy.py --working_dir policy_models/run1 --load policy_models/run1/3.1558888448 --start_epoch 4 --epochs 10 > out.log 2> out.err
+# time python3 policy/train_policy.py --working_dir policy_models/run1 --load policy_models/run1/3.1558888448 --start_epoch 4 --epochs 10 > out.log 2> out.err
+
+# time python3 policy/train_policy.py --working_dir policy_models/run0 --nooptload --start_epoch 0 --epochs 20 > out.log 2> out.err
+time python3 policy/train_policy.py --working_dir policy_models/run0 --load policy_models/run0/9.1558998717 --start_epoch 10 --epochs 50 > out.log 2> out.err

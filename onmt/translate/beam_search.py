@@ -125,7 +125,7 @@ class BeamSearch(DecodeStrategy):
         return self.select_indices.view(self.batch_size, self.beam_size)\
             .fmod(self.beam_size)
 
-    def advance(self, log_probs, attn, dec_out, guide, guide_alpha, explorer, guide_batch_size=64):
+    def advance(self, log_probs, attn, dec_out, guide, explorer, guide_batch_size=64):
         vocab_size = log_probs.size(-1)
 
         # using integer division to get an integer _B without casting
@@ -145,18 +145,11 @@ class BeamSearch(DecodeStrategy):
 
         # Multiply by guide probabilities
         if guide:
-            with torch.no_grad():
-                for batch_idx in range(int(np.ceil(dec_out.shape[1] / guide_batch_size))):
-                    idx_from = batch_idx*guide_batch_size
-                    idx_to = (batch_idx+1)*guide_batch_size
-                    data = dec_out[0][idx_from:idx_to]
-                    pred = guide(data)
+            for batch_idx in range(int(np.ceil(dec_out.shape[1] / guide_batch_size))):
+                idx_from = batch_idx*guide_batch_size
+                idx_to = (batch_idx+1)*guide_batch_size
 
-                    # if step == 4:
-                    #     embed()
-                    #     sys.exit(0)
-
-                    log_probs[idx_from:idx_to] += guide_alpha * pred
+                guide.apply(inp=dec_out[0], log_probs=log_probs, idx_from=idx_from, idx_to=idx_to)
 
         # Multiply probs by the beam probability.
         log_probs += self.topk_log_probs.view(_B * self.beam_size, 1)

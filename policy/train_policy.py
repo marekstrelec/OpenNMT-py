@@ -17,6 +17,7 @@ from IPython import embed
 
 from model import Net, train_model, test_model
 from dataset import ExploreDataset
+from auto import Autoencoder
 
 
 def main():
@@ -43,7 +44,8 @@ def main():
     parser.add_argument('--load', type=str, default=None, metavar='N')
     parser.add_argument('--start_epoch', type=int, default=None, metavar='N')
     parser.add_argument('--nooptload', action='store_true', default=False)
-    
+    parser.add_argument('--auto', type=str, default=None, metavar='N', required=False)
+
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
     args = parser.parse_args()
@@ -57,6 +59,9 @@ def main():
     DATASET_MODE = 'dist'
     TEST_LOSS_FN = 'kl'
 
+    # DATASET_MODE = 'max'
+    # TEST_LOSS_FN = 'nll'
+
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if use_cuda else "cpu")
 
@@ -65,6 +70,15 @@ def main():
 
     output_dir = Path(args.working_dir)
     output_dir.mkdir(exist_ok=True, parents=True)
+
+    # AUTOENCODER
+    model_auto = None
+    if args.auto:
+        model_auto = Autoencoder(input_size=INPUT_SIZE).to(device)
+        print("* Loading autoencoder model: {0}".format(args.auto))
+        model_auto.load_state_dict(torch.load(args.auto + ".model"))
+
+        INPUT_SIZE = 200
 
     # PROCESS
     model = Net(input_size=INPUT_SIZE, output_size=OUTPUT_SIZE).to(device)
@@ -90,23 +104,38 @@ def main():
         random.shuffle(data_paths)
 
         # load data
+        acc_train_loss_dist = 0
+        acc_train_loss_conf = 0
+        acc_correct_dist = 0
+        acc_correct_conf = 0
+        acc_length = 0
         for pickle_idx, pickle_path in enumerate(data_paths):
             sp_time = time.time()
 
             # TRAIN
             shard_train_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
-            train_loader = DataLoader(shard_train_dataset, batch_size=64, shuffle=True, num_workers=4)
+            train_loader = DataLoader(shard_train_dataset, batch_size=128, shuffle=True, num_workers=4)
+            res = train_model(args, TEST_LOSS_FN, model, device, train_loader, optimiser, epoch, autoencoder=model_auto, dataset_iter="{0}/{1}".format(pickle_idx+1, len(data_paths)))
+            train_loss_dist, train_loss_conf, correct_dist, correct_conf = res
+            acc_train_loss_dist += train_loss_dist
+            acc_train_loss_conf += train_loss_conf
+            acc_correct_dist += correct_dist
+            acc_correct_conf += correct_conf
+            acc_length += len(train_loader.dataset)
 
-            train_model(args, TEST_LOSS_FN, model, device, train_loader, optimiser, epoch, dataset_iter="{0}/{1}".format(pickle_idx+1, len(data_paths)))
+            print("Dataset finished: {0:.2f}s".format(time.time() - sp_time))
 
-        # TEST
-        pickle_path = Path("/local/scratch/ms2518/collected/run0/e0.pickle")
-        shard_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
-        test_loader = DataLoader(shard_dataset, batch_size=64, shuffle=True, num_workers=4)
-
-        test_model(args, TEST_LOSS_FN, model, device, test_loader)
-
-        print("Dataset finished: {0:.2f}s".format(time.time() - sp_time))
+        print('\nTraining stats (e={0}): Average dist loss: {1:.4f}, Average conf loss: {2:.4f}, Accuracy dist: {3}/{7} ({4:.0f}%), Accuracy conf: {5}/{7} ({6:.0f}%)\n'.format(
+            epoch,
+            acc_train_loss_dist / acc_length,
+            acc_train_loss_conf / acc_length,
+            acc_correct_dist,
+            100. * acc_correct_dist / acc_length,
+            acc_correct_conf,
+            100. * acc_correct_conf / acc_length,
+            acc_length)
+        )
+        sys.stdout.flush()
 
         print("<< Epoch finished: {0:.2f}s >>\n".format(time.time() - se_time))
 

@@ -18,9 +18,9 @@ from pathlib import Path
 from IPython import embed
 from onmt.imitation.utils import Explorer
 from onmt.imitation.collector import Collector
+from onmt.imitation.guide import Guide
 
 import torch
-from policy.model import Net
 
 
 logger = None
@@ -39,15 +39,13 @@ def explore(opt, shard_pairs):
     translator_large = build_translator(opt, report_score=False)
 
     # guide
-    INPUT_SIZE = 500
-    OUTPUT_SIZE = 24725
-    device = torch.device("cuda")
-
     guide = None
     if opt.il_model:
-        guide = Net(input_size=INPUT_SIZE, output_size=OUTPUT_SIZE).to(device)
-        guide.load_state_dict(torch.load(opt.il_model))
-        guide.eval()
+        guide = Guide(
+            model_path=opt.il_model,
+            mode=opt.il_mode,
+            alpha=opt.il_alpha
+        )
     
     # explorer
     explorer_large = None
@@ -72,7 +70,6 @@ def explore(opt, shard_pairs):
             tgt=tgt_shard,
             explorer=explorer_large,
             guide=guide,
-            guide_alpha=opt.il_alpha,
             src_dir=opt.src_dir,
             batch_size=opt.batch_size,
             attn_debug=opt.attn_debug,

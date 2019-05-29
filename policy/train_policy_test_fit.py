@@ -81,14 +81,14 @@ def main():
         se_time = time.time()
 
         # TRAIN
-        pickle_path = Path("/local/scratch/ms2518/collected/e0_small20.pickle")
+        pickle_path = Path("/local/scratch/ms2518/collected/e0_small30.pickle")
         shard_train_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
         train_loader = DataLoader(shard_train_dataset, batch_size=128, shuffle=True, num_workers=4)
 
         train_model(args, TEST_LOSS_FN, model, device, train_loader, optimiser, epoch, autoencoder=model_auto, dataset_iter="{0}/{1}".format(1, 1))
 
         # TEST
-        pickle_path = Path("/local/scratch/ms2518/collected/e0_small20.pickle")
+        pickle_path = Path("/local/scratch/ms2518/collected/e0_small30.pickle")
         shard_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
         test_loader = DataLoader(shard_dataset, batch_size=128, shuffle=True, num_workers=4)
 
