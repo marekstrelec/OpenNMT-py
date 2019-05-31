@@ -7,6 +7,7 @@ import torch
 from torch.utils import data
 
 from collections import Counter
+from IPython import embed
 
 
 class ExploreDataset(data.Dataset):
@@ -33,13 +34,29 @@ class ExploreDataset(data.Dataset):
 
             for d_idx, d in enumerate(data):
                 for b in d:
-                    for t in b:
+                    conf_used = False
+                    for t_idx, t in enumerate(b):
                         for origin in t:
-                            X.append(origin['dec'])
+                            t_vec = np.zeros(100, dtype=np.float32)
+                            t_vec[t_idx] = 1.0
+                            X.append(np.hstack([
+                                origin['h_out'],
+                                origin['d_out'],
+                                origin['attn'],
+                                t_vec
+                            ]))
+
+                            conf = origin['conf']
+                            if conf_used:
+                                conf = 0.
+
                             Y.append({
                                 'dist': origin['vals'],
-                                'conf': origin['conf']
+                                'conf': conf
                             })
+
+                            if origin['conf'] == 1.0:
+                                conf_used = True
 
         print("\t(Loaded in {0:.2f}s)".format(time.time() - s_time))
 

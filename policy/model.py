@@ -21,10 +21,10 @@ class Net(nn.Module):
 
         self.dropout = nn.Dropout(p=0.2)
 
-        self.fc1 = nn.Linear(input_size, 500)
-        self.fc2 = nn.Linear(500, 500)
-        self.fc3 = nn.Linear(500, 1000)
-        self.fc4_dist = nn.Linear(1000, output_size)
+        self.fc1 = nn.Linear(input_size, 1000)
+        self.fc2 = nn.Linear(1000, 500)
+        self.fc3 = nn.Linear(500, 500)
+        self.fc4_dist = nn.Linear(500, output_size)
         self.fc3_conf = nn.Linear(500, 1)
 
         self.sig = nn.Sigmoid()

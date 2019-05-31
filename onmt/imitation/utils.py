@@ -157,14 +157,26 @@ class Explorer(object):
         return data
 
 
-    def collect_data(self, beam, batch, dec_data, model, ngrams=2):
+    def collect_data(self, beam, batch, expl_data, model, ngrams=2):
         if 'data' not in self.raw_src:
             raise Exception("Data missing in raw_src!")
 
+        batch_indexes = batch.indices.cpu().numpy()
         new_batch_beam_data = self.collect_beam_data(beam, batch, ngrams)
+
+        # assert len(batch.indices.data) == len(new_batch_beam_data)
+        # with open("qqq.hyp", "a") as f_hyp:
+        #     with open("qqq.loghyp", "a") as f_loghyp:
+        #         for b_idx, _ in sorted(enumerate(batch.indices.data.cpu().numpy()), key=lambda x:x[1]):
+
+        #             b = new_batch_beam_data[b_idx]
+        #             logbest_hyp = sorted(b, key=lambda x:x[0])[0][1]['hyp_replaced']
+
+        #             best_hyp = b[0][1]['hyp_replaced']
+
+        #             f_hyp.write("{0}\n".format(" ".join(best_hyp)))
+        #             f_loghyp.write("{0}\n".format(" ".join(logbest_hyp)))
         
-        # self.beam_data.append(new_batch_beam_data)
-        # self.dec_data.append(dec_data)
 
         collected_data_batches = []
         for bth in range(beam.batch_size):
@@ -174,34 +186,34 @@ class Explorer(object):
                 hyp_length = len(new_batch_beam_data[bth][beam_beam_idx][1]['all_words'])
                 t_end = hyp_length - 1  # -1 for index
 
-                # eos_tokenid = 5
-                # +1 if the last token is </s>
-                # if new_batch_beam_data[bth][beam_beam_idx][1]['hyp'][-1] == eos_tokenid:
-                #    t_end += 1
-
-                if t_end >= len(dec_data['index'][bth]):
-                    raise Exception("Invalid timestep! (dec_data['index'], bth:{0}, t:{1})".format(bth, t_end))
+                if t_end >= len(expl_data['index'][bth]):
+                    raise Exception("Invalid timestep! (expl_data['index'], bth:{0}, t:{1})".format(bth, t_end))
 
                 b_idx = new_batch_beam_data[bth][beam_beam_idx][0]
                 res = [b_idx]
                 for t in range(t_end, -1, -1):
-                    b_idx = dec_data['index'][bth][t][b_idx]
+                    b_idx = expl_data['index'][bth][t][b_idx]
                     res.append(b_idx)
                 res = res[::-1]
                 origins.append(res)
 
             # check that decoders on t0 are all the same
-            for n in range(1, len(dec_data['dec_out'][bth][0])):
-                assert np.all(dec_data['dec_out'][bth][0][0] == dec_data['dec_out'][bth][0][n])
+            if False:
+                for n in range(1, len(expl_data['h_out'][bth][0])):
+                    assert np.all(expl_data['h_out'][bth][0][0] == expl_data['h_out'][bth][0][n])
 
             # collect decoder states and labels
             collected_data = []
             lengths = [len(n[1]['all_hyp']) for n in new_batch_beam_data[bth]]
             for t in range(max(lengths)):
-                states = defaultdict(list)
+
+                # adding beamdata based on their origin
+                states = defaultdict(list)  # beam origin => data
                 for b in range(len(origins)):
                     if t >= lengths[b]:
                         continue
+
+                    # attn = beam.attention[bth][k]
 
                     # add to states dict
                     key = origins[b][t]
@@ -211,9 +223,20 @@ class Explorer(object):
                 # add to collected data
                 qq = []
                 for k, v in states.items():
-                    dec_state = dec_data['dec_out'][bth][t][k]
+                    h_out_state = expl_data['h_out'][bth][t][k]
+                    d_out_state = expl_data['d_out'][bth][t][k]
+                    attn = expl_data['attn'][bth][t][k]
+
+                    # _, idx = attn.max(0)
+                    # src_attn_word = self.raw_src['data'][batch_indexes[bth]].src[0][idx]
+                    # src_attn_word_id = self.fields['src'].base_field.vocab.stoi[src_attn_word]
+
                     qq.append({
-                        'dec': dec_state,
+                        'h_out': h_out_state,
+                        'd_out': d_out_state,
+                        'attn': attn,
+                        # 'attn_wid': src_attn_word_id,
+                        # 'attn_w': src_attn_word,
                         'vals': v
                     })
                 collected_data.append(qq)

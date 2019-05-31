@@ -4,6 +4,8 @@ from __future__ import unicode_literals, print_function
 import torch
 from onmt.inputters.text_dataset import TextMultiField
 
+from IPython import embed
+
 
 class TranslationBuilder(object):
     """

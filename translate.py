@@ -44,7 +44,8 @@ def explore(opt, shard_pairs):
         guide = Guide(
             model_path=opt.il_model,
             mode=opt.il_mode,
-            alpha=opt.il_alpha
+            alpha=opt.il_alpha,
+            fields=translator_large.fields
         )
     
     # explorer

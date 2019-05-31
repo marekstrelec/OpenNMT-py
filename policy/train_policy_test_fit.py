@@ -50,7 +50,7 @@ def main():
 
 
     # VARS
-    INPUT_SIZE = 500
+    INPUT_SIZE = 500 * 3 + 100
     OUTPUT_SIZE = 24725
 
     # DATASET_MODE = 'dist'
@@ -81,18 +81,31 @@ def main():
         se_time = time.time()
 
         # TRAIN
-        pickle_path = Path("/local/scratch/ms2518/collected/e0_small30.pickle")
+        pickle_path = Path("/local/scratch/ms2518/sth/e0_small20.pickle")
         shard_train_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
         train_loader = DataLoader(shard_train_dataset, batch_size=128, shuffle=True, num_workers=4)
 
-        train_model(args, TEST_LOSS_FN, model, device, train_loader, optimiser, epoch, autoencoder=model_auto, dataset_iter="{0}/{1}".format(1, 1))
+        res = train_model(args, TEST_LOSS_FN, model, device, train_loader, optimiser, epoch, autoencoder=model_auto, dataset_iter="{0}/{1}".format(1, 1))
+        train_loss_dist, train_loss_conf, correct_dist, correct_conf = res
 
-        # TEST
-        pickle_path = Path("/local/scratch/ms2518/collected/e0_small30.pickle")
-        shard_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
-        test_loader = DataLoader(shard_dataset, batch_size=128, shuffle=True, num_workers=4)
+        print('\nTraining stats (e={0}): Average dist loss: {1:.4f}, Average conf loss: {2:.4f}, Accuracy dist: {3}/{7} ({4:.0f}%), Accuracy conf: {5}/{7} ({6:.0f}%)\n'.format(
+            epoch,
+            train_loss_dist / len(train_loader.dataset),
+            train_loss_conf / len(train_loader.dataset),
+            correct_dist,
+            100. * correct_dist / len(train_loader.dataset),
+            correct_conf,
+            100. * correct_conf / len(train_loader.dataset),
+            len(train_loader.dataset))
+        )
+        sys.stdout.flush()
 
-        test_model(args, TEST_LOSS_FN, model, device, test_loader, autoencoder=model_auto)
+        # # TEST
+        # pickle_path = Path("/local/scratch/ms2518/sth/e0.pickle")
+        # shard_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
+        # test_loader = DataLoader(shard_dataset, batch_size=128, shuffle=True, num_workers=4)
+
+        # test_model(args, TEST_LOSS_FN, model, device, test_loader, autoencoder=model_auto)
 
         print("<< Epoch finished: {0:.2f}s >>\n".format(time.time() - se_time))
 

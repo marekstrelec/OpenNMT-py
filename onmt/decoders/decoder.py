@@ -212,7 +212,7 @@ class RNNDecoderBase(DecoderBase):
               ``(tgt_len, batch, src_len)``.
         """
 
-        dec_state, dec_outs, attns = self._run_forward_pass(
+        dec_state, dec_outs, attns, rnn_output = self._run_forward_pass(
             tgt, memory_bank, memory_lengths=memory_lengths)
 
         # Update the state with the result.
@@ -235,7 +235,7 @@ class RNNDecoderBase(DecoderBase):
             for k in attns:
                 if type(attns[k]) == list:
                     attns[k] = torch.stack(attns[k])
-        return dec_outs, attns
+        return dec_outs, attns, rnn_output
 
 
 class StdRNNDecoder(RNNDecoderBase):
@@ -424,7 +424,7 @@ class InputFeedRNNDecoder(RNNDecoderBase):
         # embed()
         # sys.exit()
 
-        return dec_state, dec_outs, attns
+        return dec_state, dec_outs, attns, rnn_output
 
     def _build_rnn(self, rnn_type, input_size,
                    hidden_size, num_layers, dropout):

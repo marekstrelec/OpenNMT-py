@@ -8,17 +8,17 @@ RUN_IDX=${1}
 MODEL_NAME=${2}
 MODEL_PREFIX=`echo ${2} | cut -d '.' -f 1`
 
-DATASET="VALID"
-FOLDER=dataset/iwslt14/dev
-SRC_NAME=valid.1k.de
-TGT_NAME=valid.1k.en
-OUT_NAME=valid.1k.out
+# DATASET="VALID"
+# FOLDER=dataset/iwslt14/dev
+# SRC_NAME=valid.1k.de
+# TGT_NAME=valid.1k.en
+# OUT_NAME=valid.1k.out
 
-# DATASET="TRAIN"
-# FOLDER=dataset/iwslt14/train
-# SRC_NAME=train.1k.de
-# TGT_NAME=train.1k.en
-# OUT_NAME=train.1k.out
+DATASET="TRAIN"
+FOLDER=dataset/iwslt14/train
+SRC_NAME=train.1k.de
+TGT_NAME=train.1k.en
+OUT_NAME=train.1k.out
 
 modes=("norm_al" "norm_al_binconf" "norm_al_conf" "sum_al")  # sum_conf
 alphas=(0.1 0.5)
@@ -50,6 +50,6 @@ for MODE in ${modes[@]}; do
         echo ">> (${DATASET}) ${MODE} ${AL}"
         mkdir -p outs/e${RUN_IDX}/m${MODEL_PREFIX}/
         cp ${FOLDER}/${OUT_NAME}_${MODE}_${AL} outs/e${RUN_IDX}/m${MODEL_PREFIX}/
-        perl multi-bleu.perl ${FOLDER}/${TGT_NAME} < outs/e${RUN_IDX}/m${MODEL_PREFIX}/${OUT_NAME}_${MODE}_${AL}
+        perl multi-bleu.perl ${FOLDER}/${TGT_NAME} < outs/e${RUN_IDX}/m${MODEL_PREFIX}/${OUT_NAME}_${MODE}_${AL} 2> /dev/null
     done
 done
