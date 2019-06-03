@@ -51,9 +51,12 @@ def explore(opt, shard_pairs):
     # explorer
     explorer_large = None
     if opt.explore:
-        # output dir for collected data
-        explore_dirout = Path(opt.explore_dirout)
-        explore_dirout.mkdir(exist_ok=True, parents=True)
+
+        explore_dirout = None
+        if opt.explore_dirout:
+            # output dir for collected data
+            explore_dirout = Path(opt.explore_dirout)
+            explore_dirout.mkdir(exist_ok=True, parents=True)
 
         explorer_large = Explorer('large', translator_large.fields, translator_large.raw_src, explore_dirout, collect_n_best=opt.explore_nbest)
 
@@ -77,10 +80,10 @@ def explore(opt, shard_pairs):
         )
         logger.info("Done. t={0:.2f}s".format(time.time() - s_time))
 
-        if opt.explore:
+        if opt.explore and opt.explore_dirout:
             explorer_large.dump_data_and_iterate_if(size=100)
 
-    if opt.explore:
+    if opt.explore and opt.explore_dirout:
         # dump the rest
         explorer_large.dump_data_and_iterate_if(size=1)
 

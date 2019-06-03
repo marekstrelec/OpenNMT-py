@@ -687,6 +687,7 @@ class Translator(object):
         d_out_memory = [[] for _ in range(batch.batch_size)]
         attn_memory = [[] for _ in range(batch.batch_size)]
         batch_indexes = [[] for _ in range(batch.batch_size)]
+        batch_seq = [[] for _ in range(batch.batch_size)]
 
         for step in range(max_length):
             # print(step)
@@ -697,7 +698,7 @@ class Translator(object):
             # print("Step: {0}".format(step))
             decoder_input = beam.current_predictions.view(1, -1, 1)
 
-            log_probs, attn, dec_out, dec_state = self._decode_and_generate(
+            log_probs, attn, h_out, dec_state = self._decode_and_generate(
                 decoder_input,
                 memory_bank,
                 batch,
@@ -707,17 +708,24 @@ class Translator(object):
                 step=step,
                 batch_offset=beam._batch_offset)
 
+            _, attn_max_idxs = torch.max(attn, dim=2)
+            attn_max_embeds = self.model.encoder.embeddings(attn_max_idxs.reshape(1, -1, 1)).squeeze(0)
+
             # ADVANCE
-            beam.advance(log_probs, attn, dec_out, guide, explorer)
+            t_vec = np.zeros((h_out.shape[1], 100), dtype=np.float32)
+            t_vec[:, step] = 1.0
+            t_vec = torch.from_numpy(t_vec).to('cuda')
+            guide_data = torch.cat((h_out.squeeze(0), dec_state, attn_max_embeds, t_vec), dim=1)
+            beam.advance(log_probs, attn, guide, guide_data, explorer)
 
-            # embed()
-            # sys.exit(0)
-
-            # STORE DEC_OUT & ATTN
-            h_data = dec_out.squeeze(0).cpu().numpy()
+            # COLLECT DATA
+            h_data = h_out.squeeze(0).cpu().numpy()
             dout_data = dec_state.cpu().numpy()
-            attn_data = attn.squeeze(0).cpu().numpy()
-            assert beam._batch_offset.numpy().shape[0] == h_data.shape[0]//self.beam_size
+            attn_max_embeds = attn_max_embeds.cpu().numpy()
+            batch_index_data = beam._batch_index.cpu().numpy()
+            assert beam._batch_offset.shape[0] == h_data.shape[0]//self.beam_size
+            assert beam._batch_offset.shape[0] == batch_index_data.shape[0]
+
             for bo_idx, bo in enumerate(beam._batch_offset.numpy()):
 
                 # attentional vector
@@ -731,21 +739,19 @@ class Translator(object):
                 d_out_memory[bo].append(dout_data_beams)
 
                 # attention
-                attn_memory_beams = attn_data[bo_idx*self.beam_size:(bo_idx+1)*self.beam_size]
-                assert attn_memory_beams.shape[0] == self.beam_size
-                att_wordids = []
-                for attn_b in attn_memory_beams:
-                    att_wordids.append(np.argmax(attn_b))
-                att_wordids = torch.from_numpy(np.asarray(att_wordids)).reshape(1, len(att_wordids), 1).to('cuda')
-                att_embeds = self.model.encoder.embeddings(att_wordids).squeeze(0).cpu().numpy()
-                attn_memory[bo].append(att_embeds)
-
-            # # STORE _batch_index
-            batch_index_data = beam._batch_index.cpu().numpy()
-            assert beam._batch_offset.numpy().shape[0] == batch_index_data.shape[0]
-            for bo_idx, bo in enumerate(beam._batch_offset.numpy()):
+                attn_embed_beams = attn_max_embeds[bo_idx*self.beam_size:(bo_idx+1)*self.beam_size]
+                assert attn_embed_beams.shape[0] == self.beam_size
+                attn_memory[bo].append(attn_embed_beams)
+            
+                # batch_index
                 batch_index_beams = batch_index_data[bo_idx] - (bo_idx*self.beam_size)
+                assert batch_index_beams.shape[0] == self.beam_size
                 batch_indexes[bo].append(batch_index_beams)
+
+                # alive_seq
+                batch_seq_beams = beam.alive_seq[bo_idx*self.beam_size:(bo_idx+1)*self.beam_size, -1]
+                assert batch_seq_beams.shape[0] == self.beam_size
+                batch_seq[bo].append(batch_seq_beams)
 
             # Update finished
             any_beam_is_finished = beam.is_finished.any()
@@ -775,10 +781,16 @@ class Translator(object):
                 lambda state, dim: state.index_select(dim, select_indices))
 
             # print(step, beam._batch_index.cpu().numpy().shape)
-            # if step == 0:
+            # if step == 1:
             #     embed()
             #     sys.exit(0)
 
+            # print("STEP: {0}".format(step))
+            # for n in range(30):
+            #     orig = batch_indexes[0][-1][n]
+            #     wrd = explorer.idtoword(batch_seq[0][-1][n], 'tgt')
+            #     print("{0}: {1} -> {2}".format(n, orig, wrd))
+            # print("")
         # ZZZZZ
 
         results["scores"] = beam.scores
@@ -791,7 +803,8 @@ class Translator(object):
                 'h_out': h_out_memory,
                 'd_out': d_out_memory,
                 'attn': attn_memory,
-                'index': batch_indexes
+                'index': batch_indexes,
+                'seq': batch_seq
             }
 
             # s_time = time.time()

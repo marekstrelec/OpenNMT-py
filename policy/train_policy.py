@@ -113,8 +113,9 @@ def main():
             sp_time = time.time()
 
             # TRAIN
-            shard_train_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
+            shard_train_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE, oversample=5)
             train_loader = DataLoader(shard_train_dataset, batch_size=128, shuffle=True, num_workers=4)
+
             res = train_model(args, TEST_LOSS_FN, model, device, train_loader, optimiser, epoch, autoencoder=model_auto, dataset_iter="{0}/{1}".format(pickle_idx+1, len(data_paths)))
             train_loss_dist, train_loss_conf, correct_dist, correct_conf = res
             acc_train_loss_dist += train_loss_dist

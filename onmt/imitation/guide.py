@@ -7,7 +7,7 @@ from policy.model import Net
 from IPython import embed
 
 
-INPUT_SIZE = 500
+INPUT_SIZE = 500 * 3 + 100
 OUTPUT_SIZE = 24725
 device = torch.device("cuda")
 
@@ -24,6 +24,7 @@ class Guide(object):
         self.fields = fields
 
         self.model = Net(input_size=INPUT_SIZE, output_size=OUTPUT_SIZE).to(device)
+        print("* Loading model: {0}".format(str(model_path)))
         self.model.load_state_dict(torch.load(model_path))
         self.model.eval()
 

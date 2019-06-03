@@ -9,7 +9,7 @@ import torch
 
 from nltk.translate.bleu_score import sentence_bleu
 from pathlib import Path
-from collections import defaultdict, Counter
+from collections import defaultdict, Counter, OrderedDict
 
 from IPython import embed
 
@@ -24,9 +24,6 @@ class Explorer(object):
         self.raw_src = raw_src
         self.working_dirpath = working_dirpath
         self.collect_n_best = collect_n_best
-
-        if not self.working_dirpath.exists():
-            raise Exception("{0} does not exist!".format(str(self.working_dirpath)))
 
         self.collect_iter = 0
         self.collected_data = []
@@ -149,10 +146,17 @@ class Explorer(object):
 
             # sort beams with respect to BLEU score and return n_best while keeping indexes
             beam_data = list(sorted(enumerate(beam_data), key=lambda x:x[1]['bleu'], reverse=True))
-            if self.collect_n_best:
-                beam_data = beam_data[:self.collect_n_best]
+            if not self.collect_n_best:
+                data.append(beam_data)
+            else:
+                best_beam_data = []
+                for n in range(self.collect_n_best):
+                    if beam_data[n][0] == 0:  # logbest
+                        break
 
-            data.append(beam_data)
+                    best_beam_data.append(beam_data[n])
+
+                data.append(best_beam_data)
 
         return data
 
@@ -178,10 +182,13 @@ class Explorer(object):
         #             f_loghyp.write("{0}\n".format(" ".join(logbest_hyp)))
         
 
-        collected_data_batches = []
+        collected_data_batches = OrderedDict()
         for bth in range(beam.batch_size):
+            if not len(new_batch_beam_data[bth]):
+                continue
+
             origins = []  # [B, T]
-            # collect a lists of indexes that represent beam origins
+            # iterate over best beams and collect a lists of indexes that represent beam origins
             for beam_beam_idx in range(len(new_batch_beam_data[bth])):
                 hyp_length = len(new_batch_beam_data[bth][beam_beam_idx][1]['all_words'])
                 t_end = hyp_length - 1  # -1 for index
@@ -189,21 +196,29 @@ class Explorer(object):
                 if t_end >= len(expl_data['index'][bth]):
                     raise Exception("Invalid timestep! (expl_data['index'], bth:{0}, t:{1})".format(bth, t_end))
 
-                b_idx = new_batch_beam_data[bth][beam_beam_idx][0]
+                prediction_bestlog_pos = new_batch_beam_data[bth][beam_beam_idx][0]
+                b_idx = beam.orig_positions_logsorted[bth][prediction_bestlog_pos]
                 res = [b_idx]
                 for t in range(t_end, -1, -1):
                     b_idx = expl_data['index'][bth][t][b_idx]
                     res.append(b_idx)
                 res = res[::-1]
+
+                for n_idx, n in enumerate(res[1:]):
+                    expected = new_batch_beam_data[bth][beam_beam_idx][1]['all_words']
+                    assert self.idtoword(expl_data['seq'][bth][n_idx][n], 'tgt') == expected[n_idx]
+
                 origins.append(res)
 
             # check that decoders on t0 are all the same
-            if False:
+            if True:
                 for n in range(1, len(expl_data['h_out'][bth][0])):
                     assert np.all(expl_data['h_out'][bth][0][0] == expl_data['h_out'][bth][0][n])
 
             # collect decoder states and labels
             collected_data = []
+            best_prediction_logscore = beam.predictions[bth][0].cpu().numpy()
+            used_conf = set()
             lengths = [len(n[1]['all_hyp']) for n in new_batch_beam_data[bth]]
             for t in range(max(lengths)):
 
@@ -213,49 +228,66 @@ class Explorer(object):
                     if t >= lengths[b]:
                         continue
 
-                    # attn = beam.attention[bth][k]
-
                     # add to states dict
                     key = origins[b][t]
-                    val = (new_batch_beam_data[bth][b][1]['all_hyp'][t], new_batch_beam_data[bth][b][1]['all_words'][t])
+                    val = (new_batch_beam_data[bth][b][1]['all_hyp'][t], new_batch_beam_data[bth][b][1]['all_words'][t], b)
                     states[key].append(val)
 
                 # add to collected data
                 qq = []
-                for k, v in states.items():
+                for k, vs in states.items():
                     h_out_state = expl_data['h_out'][bth][t][k]
                     d_out_state = expl_data['d_out'][bth][t][k]
                     attn = expl_data['attn'][bth][t][k]
 
-                    # _, idx = attn.max(0)
-                    # src_attn_word = self.raw_src['data'][batch_indexes[bth]].src[0][idx]
-                    # src_attn_word_id = self.fields['src'].base_field.vocab.stoi[src_attn_word]
+                    conf = 0.
+                    if t < len(best_prediction_logscore):
+                        most_common_wordid = Counter([x[0] for x in vs]).most_common()[0][0]
+
+                        # check for used
+                        any_in_used = any([1 for x in vs if x[2] in used_conf])
+                        if not any_in_used:
+
+                            # if most common is the one chosen by log
+                            if most_common_wordid == best_prediction_logscore[t]:
+                                conf = 0.
+                            else:
+                                conf = 1.
+
+                            # disable all but logbest path
+                            for v in vs:
+                                if v[0] != best_prediction_logscore[t]:
+                                    used_conf.add(v[2])
+
 
                     qq.append({
                         'h_out': h_out_state,
                         'd_out': d_out_state,
                         'attn': attn,
-                        # 'attn_wid': src_attn_word_id,
-                        # 'attn_w': src_attn_word,
-                        'vals': v
+                        'vals': vs,
+                        'conf': conf
                     })
                 collected_data.append(qq)
 
-            collected_data_batches.append(collected_data)
+            collected_data_batches[bth] = collected_data
 
 
             # log functions
             def foo():
-                for n in range(self.collect_n_best):
-                    print(" ".join(new_batch_beam_data[bth][n][1]['all_words']))
+                for n in new_batch_beam_data[bth]:
+                    print(" ".join(n[1]['all_words']))
 
             def bar():
-                for n in collected_data:
+                for n_idx, n in enumerate(collected_data):
+                    print(n_idx)
                     for m in n:
-                        # if 'conf' in m:
+                        print("\t", end="")
                         print(m['conf'], end=" ")
-                        print(list(Counter(m['vals']).items()), end=" --- ")
-                    print()
+                        print(m['vals'])
+                        # print(list(Counter(m['vals']).items()))
+
+            def logbest():
+                print(" ".join(self.seqtowords(beam.predictions[bth][0].cpu().numpy(), 'tgt')['all_words']))
 
             def trydec():
                 t = len(collected_data) - 1
@@ -265,36 +297,18 @@ class Explorer(object):
 
                 print(np.argmax(score.cpu().numpy()[0]))
 
-
-            # add confidence
-            best_prediction_logscore = beam.predictions[bth][0].cpu().numpy()
-            min_range = min(len(best_prediction_logscore), len(collected_data_batches[bth]))
-            t = 0
-            while t < min_range:
-                stop = False
-                for b in collected_data_batches[bth][t]:
-                    for v in b['vals']:
-                        if v[0] != best_prediction_logscore[t]:
-                            stop = True
-                            break
-                    if stop:
-                        break
-                if stop:
-                    break
-
-                for b in collected_data_batches[bth][t]:
-                    b['conf'] = 0.
-                t += 1
-
-            # add confidence - set therest to 1.
-            for t2 in range(t, len(collected_data_batches[bth])):
-                for b in collected_data_batches[bth][t2]:
-                    b['conf'] = 1.
+        # # Compara_decisions
+        # embed()
+        # sys.exit(0)
 
         # add to the global storage
-        self.collected_data.append(collected_data_batches)
+        if len(collected_data_batches):
+            self.collected_data.append(list(collected_data_batches.values()))
 
     def dump_data_and_iterate_if(self, size):
+        if not self.working_dirpath.exists():
+            raise Exception("{0} does not exist!".format(str(self.working_dirpath)))
+
         if len(self.collected_data) < size:
             return
 

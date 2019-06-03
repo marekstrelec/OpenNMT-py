@@ -19,7 +19,7 @@ class Net(nn.Module):
         self.input_size = input_size
         self.output_size = output_size
 
-        self.dropout = nn.Dropout(p=0.2)
+        self.dropout = nn.Dropout(p=0.5)
 
         self.fc1 = nn.Linear(input_size, 1000)
         self.fc2 = nn.Linear(1000, 500)

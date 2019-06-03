@@ -78,6 +78,9 @@ class BeamSearch(DecodeStrategy):
         # result caching
         self.hypotheses = [[] for _ in range(batch_size)]
 
+        self.orig_positions = [[] for _ in range(batch_size)]
+        self.orig_positions_logsorted = [[] for _ in range(batch_size)]
+
         # beam state
         self.top_beam_finished = torch.zeros([batch_size], dtype=torch.uint8)
         self.best_scores = torch.full([batch_size], -1e10, dtype=torch.float,
@@ -125,7 +128,7 @@ class BeamSearch(DecodeStrategy):
         return self.select_indices.view(self.batch_size, self.beam_size)\
             .fmod(self.beam_size)
 
-    def advance(self, log_probs, attn, dec_out, guide, explorer, guide_batch_size=64):
+    def advance(self, log_probs, attn, guide, guide_data, explorer, guide_batch_size=64):
         vocab_size = log_probs.size(-1)
 
         # using integer division to get an integer _B without casting
@@ -145,11 +148,11 @@ class BeamSearch(DecodeStrategy):
 
         # Multiply by guide probabilities
         if guide:
-            for batch_idx in range(int(np.ceil(dec_out.shape[1] / guide_batch_size))):
+            for batch_idx in range(int(np.ceil(guide_data.shape[0] / guide_batch_size))):
                 idx_from = batch_idx*guide_batch_size
                 idx_to = (batch_idx+1)*guide_batch_size
 
-                guide.apply(inp=dec_out[0], log_probs=log_probs, idx_from=idx_from, idx_to=idx_to)
+                guide.apply(inp=guide_data, log_probs=log_probs, idx_from=idx_from, idx_to=idx_to)
 
         # Multiply probs by the beam probability.
         log_probs += self.topk_log_probs.view(_B * self.beam_size, 1)
@@ -256,6 +259,9 @@ class BeamSearch(DecodeStrategy):
                     s = self.topk_scores[i, j] / (step + 1)
                     if self.best_scores[b] < s:
                         self.best_scores[b] = s
+
+                self.orig_positions[b].append(j.item())  # save the original beam position
+
                 self.hypotheses[b].append((
                     self.topk_scores[i, j],
                     predictions[i, j, 1:],  # Ignore start_token.
@@ -272,14 +278,15 @@ class BeamSearch(DecodeStrategy):
                 finish_flag = self.top_beam_finished[i] != 0
             if finish_flag and len(self.hypotheses[b]) >= self.n_best:
                 best_hyp = sorted(
-                    self.hypotheses[b], key=lambda x: x[0], reverse=True)
-                for n, (score, pred, attn) in enumerate(best_hyp):
+                    zip(self.orig_positions[b], self.hypotheses[b]), key=lambda x: x[1][0], reverse=True)
+                for n, (orig_pos, (score, pred, attn)) in enumerate(best_hyp):
                     if n >= self.n_best:
                         break
                     # embed()
                     # sys.exit(0)
                     self.scores[b].append(score)
                     self.predictions[b].append(pred)  # HERE
+                    self.orig_positions_logsorted[b].append(orig_pos)
                     self.attention[b].append(
                         attn if attn is not None else [])
             else:
@@ -300,7 +307,8 @@ class BeamSearch(DecodeStrategy):
         non_finished = non_finished.to(self.topk_ids.device)
         self.topk_log_probs = self.topk_log_probs.index_select(0,
                                                                non_finished)
-        self._batch_index = self._batch_index.index_select(0, non_finished)
+
+        self._batch_index = self._batch_index.index_select(0, non_finished)  # non_finished refers to batch
         self.select_indices = self._batch_index.view(_B_new * self.beam_size)
         # print("alive_seq shape", self.alive_seq.shape)
         self.alive_seq = predictions.index_select(0, non_finished).view(-1, self.alive_seq.size(-1))

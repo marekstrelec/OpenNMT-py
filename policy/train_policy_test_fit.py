@@ -40,17 +40,15 @@ def main():
     parser.add_argument('--log-interval', type=int, default=500, metavar='N',
                         help='how many batches to wait before logging training status')
 
-    parser.add_argument('--working_dir', type=str, default=None, metavar='N', required=False)
     parser.add_argument('--auto', type=str, default=None, metavar='N', required=False)
     
-    parser.add_argument('--save-model', action='store_true', default=False,
-                        help='For Saving the current Model')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
 
     # VARS
     INPUT_SIZE = 500 * 3 + 100
+    INPUT_SIZE = 500
     OUTPUT_SIZE = 24725
 
     # DATASET_MODE = 'dist'
@@ -81,7 +79,7 @@ def main():
         se_time = time.time()
 
         # TRAIN
-        pickle_path = Path("/local/scratch/ms2518/sth/e0_small20.pickle")
+        pickle_path = Path("/local/scratch/ms2518/e0_small25.pickle")
         shard_train_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
         train_loader = DataLoader(shard_train_dataset, batch_size=128, shuffle=True, num_workers=4)
 
@@ -104,7 +102,6 @@ def main():
         # pickle_path = Path("/local/scratch/ms2518/sth/e0.pickle")
         # shard_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE)
         # test_loader = DataLoader(shard_dataset, batch_size=128, shuffle=True, num_workers=4)
-
         # test_model(args, TEST_LOSS_FN, model, device, test_loader, autoencoder=model_auto)
 
         print("<< Epoch finished: {0:.2f}s >>\n".format(time.time() - se_time))
