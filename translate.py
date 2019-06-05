@@ -45,7 +45,8 @@ def explore(opt, shard_pairs):
             model_path=opt.il_model,
             mode=opt.il_mode,
             alpha=opt.il_alpha,
-            fields=translator_large.fields
+            fields=translator_large.fields,
+            test=opt.test_mode
         )
     
     # explorer
@@ -58,7 +59,14 @@ def explore(opt, shard_pairs):
             explore_dirout = Path(opt.explore_dirout)
             explore_dirout.mkdir(exist_ok=True, parents=True)
 
-        explorer_large = Explorer('large', translator_large.fields, translator_large.raw_src, explore_dirout, collect_n_best=opt.explore_nbest)
+        explorer_large = Explorer(
+            'large',
+            translator_large.fields,
+            translator_large.raw_src,
+            explore_dirout,
+            collect_n_best=opt.explore_nbest,
+            test=opt.test_mode
+        )
 
     for i, (src_shard, tgt_shard) in enumerate(shard_pairs):
         # if i < 128:
@@ -128,6 +136,9 @@ if __name__ == "__main__":
     parser = _get_parser()
 
     opt = parser.parse_args()
+
+    # embed()
+    # sys.exit(0)
     
     opt.batch_size = opt.il_shardsize
     opt.shard_size = opt.il_shardsize

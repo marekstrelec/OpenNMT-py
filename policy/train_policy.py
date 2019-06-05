@@ -56,11 +56,11 @@ def main():
     INPUT_SIZE = 500 * 3 + 100
     OUTPUT_SIZE = 24725
 
-    DATASET_MODE = 'dist'
-    TEST_LOSS_FN = 'kl'
+    # DATASET_MODE = 'dist'
+    # TEST_LOSS_FN = 'kl'
 
-    # DATASET_MODE = 'max'
-    # TEST_LOSS_FN = 'nll'
+    DATASET_MODE = 'max'
+    TEST_LOSS_FN = 'nll'
 
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -90,7 +90,11 @@ def main():
         print("* Loading model: {0}".format(args.load))
         model.load_state_dict(torch.load(args.load + ".model"))
         if not args.nooptload:
+            print("* Loading optimiser: {0}".format(args.load))
             optimiser.load_state_dict(torch.load(args.load + ".opt"))
+
+    # embed()
+    # sys.exit(0)
 
     if args.start_epoch is None:
         args.start_epoch = 1
@@ -113,7 +117,7 @@ def main():
             sp_time = time.time()
 
             # TRAIN
-            shard_train_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE, oversample=5)
+            shard_train_dataset = ExploreDataset(pickle_path, output_size=OUTPUT_SIZE, mode=DATASET_MODE, oversample=20)
             train_loader = DataLoader(shard_train_dataset, batch_size=128, shuffle=True, num_workers=4)
 
             res = train_model(args, TEST_LOSS_FN, model, device, train_loader, optimiser, epoch, autoencoder=model_auto, dataset_iter="{0}/{1}".format(pickle_idx+1, len(data_paths)))
@@ -146,8 +150,8 @@ def main():
         torch.save(model.state_dict(), str(model_save_path))
         torch.save(optimiser.state_dict(), str(opt_save_path))
 
-        if last_opt_save_path:
-            last_opt_save_path.unlink()
+        # if last_opt_save_path:
+        #     last_opt_save_path.unlink()
 
         last_opt_save_path = opt_save_path
 

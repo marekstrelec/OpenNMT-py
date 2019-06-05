@@ -19,24 +19,29 @@ class Net(nn.Module):
         self.input_size = input_size
         self.output_size = output_size
 
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=0.4)
 
-        self.fc1 = nn.Linear(input_size, 1000)
-        self.fc2 = nn.Linear(1000, 500)
-        self.fc3 = nn.Linear(500, 500)
-        self.fc4_dist = nn.Linear(500, output_size)
-        self.fc3_conf = nn.Linear(500, 1)
+        self.bn1 = nn.BatchNorm1d(num_features=1500)
+        self.bn2 = nn.BatchNorm1d(num_features=1000)
+
+
+        self.fc1 = nn.Linear(input_size, 1500)
+        self.fc2 = nn.Linear(1500, 1000)
+        # self.fc3 = nn.Linear(1000, 1000)
+        self.fc3_dist = nn.Linear(1000, output_size)
+        self.fc3_conf = nn.Linear(1000, 1)
 
         self.sig = nn.Sigmoid()
 
     def forward(self, x):
-        body = self.dropout(F.relu(self.fc1(x)))
-        body = self.dropout(F.relu(self.fc2(body)))
+        body = self.dropout(F.relu(self.bn1(self.fc1(x))))
+        body = self.dropout(F.relu(self.bn2(self.fc2(body))))
 
-        dist_head = self.dropout(F.relu(self.fc3(body)))
-        dist_head = self.fc4_dist(dist_head)
-        dist_head = F.log_softmax(dist_head, dim=1)
+        # dist_head = self.dropout(F.relu(self.fc3(body)))
+        # dist_head = self.fc4_dist(dist_head)
+        # dist_head = F.log_softmax(dist_head, dim=1)
 
+        dist_head = F.log_softmax(self.fc3_dist(body), dim=1)
         conf_head = self.sig(self.fc3_conf(body))
 
         return dist_head, conf_head
@@ -84,6 +89,7 @@ def train_model(args, loss_fn, model, device, train_loader, optimizer, epoch, au
         loss = loss_dist + loss_conf
 
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
         optimizer.step()
 
         if batch_idx > 0 and batch_idx % args.log_interval == 0:

@@ -17,6 +17,8 @@ def imitation_opts(parser):
     parser.add('--explore_dirout', type=str, default=None)
     parser.add('--explore_nbest', type=int, default=None)
 
+    parser.add('--test_mode', action='store_true', default=False)
+
 
 def config_opts(parser):
     parser.add('-config', '--config', required=False,

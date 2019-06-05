@@ -20,8 +20,8 @@ OUT_NAME=valid.1k.out
 # TGT_NAME=train.1k.en
 # OUT_NAME=train.1k.out
 
-modes=("norm_al" "norm_al_conf")  # sum_conf "sum_al" "norm_al_binconf"
-alphas=(0.1 0.25 0.5 0.75 1.0)
+modes=("norm_al2")  # "norm_al"  "sum_conf" "sum_al" "norm_al_binconf" "norm_al_conf2" "norm_al2"
+alphas=(0.1 0.25 0.5 1.0)
 
 # modes=("norm_al_conf")
 # alphas=(1.0)
@@ -30,12 +30,15 @@ if [ -f "bleu.log" ]; then
     rm bleu.log
 fi
 
-models=("1.1559512254"  "2.1559514903"  "3.1559517587"  "4.1559520209"  "5.1559522864")
-for MODEL_NAME in ${models[@]}; do
-    ls policy_models/run${RUN_IDX}/${MODEL_NAME}.model
+MODEL_FLDR="policy_models"
+model_ids=("2 4 6 8 10")
+for MODEL_ID in ${model_ids[@]}; do
+    MODEL_PATH=`ls ${MODEL_FLDR}/run${RUN_IDX}/${MODEL_ID}.*.model | head -1`
+    ls ${MODEL_PATH}
 done
 
-for MODEL_NAME in ${models[@]}; do
+for MODEL_ID in ${model_ids[@]}; do
+    MODEL_NAME=`ls ${MODEL_FLDR}/run${RUN_IDX}/${MODEL_ID}.*.model | xargs -n 1 basename | head -1`
     MODEL_PREFIX=`echo ${MODEL_NAME} | cut -d '.' -f 1`
 
     for MODE in ${modes[@]}; do
@@ -50,7 +53,7 @@ for MODEL_NAME in ${models[@]}; do
                 -gpu 0 \
                 --il_shardsize 100 \
                 --il_beamsize 30 \
-                --il_model policy_models/run${RUN_IDX}/${MODEL_NAME}.model \
+                --il_model ${MODEL_FLDR}/run${RUN_IDX}/${MODEL_NAME} \
                 --il_alpha ${AL} \
                 --il_mode ${MODE}
         done

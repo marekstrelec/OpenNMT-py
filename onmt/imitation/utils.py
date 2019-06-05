@@ -16,7 +16,7 @@ from IPython import embed
 
 class Explorer(object):
 
-    def __init__(self, mode, fields, raw_src, working_dirpath, collect_n_best):
+    def __init__(self, mode, fields, raw_src, working_dirpath, collect_n_best, test):
         assert mode in ['small', 'large']
 
         self.mode = mode
@@ -24,6 +24,7 @@ class Explorer(object):
         self.raw_src = raw_src
         self.working_dirpath = working_dirpath
         self.collect_n_best = collect_n_best
+        self.test = test
 
         self.collect_iter = 0
         self.collected_data = []
@@ -298,8 +299,9 @@ class Explorer(object):
                 print(np.argmax(score.cpu().numpy()[0]))
 
         # # Compara_decisions
-        # embed()
-        # sys.exit(0)
+        # if self.test:
+        #     embed()
+        #     sys.exit(0)
 
         # add to the global storage
         if len(collected_data_batches):
