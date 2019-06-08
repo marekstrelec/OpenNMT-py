@@ -53,7 +53,7 @@ def main():
 
 
     # VARS
-    INPUT_SIZE = 500 * 3 + 100
+    INPUT_SIZE = 500 * 3  # + 100
     OUTPUT_SIZE = 24725
 
     # DATASET_MODE = 'dist'
@@ -150,8 +150,8 @@ def main():
         torch.save(model.state_dict(), str(model_save_path))
         torch.save(optimiser.state_dict(), str(opt_save_path))
 
-        # if last_opt_save_path:
-        #     last_opt_save_path.unlink()
+        if last_opt_save_path:
+            last_opt_save_path.unlink()
 
         last_opt_save_path = opt_save_path
 

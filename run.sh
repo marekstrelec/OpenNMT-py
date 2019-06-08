@@ -15,8 +15,9 @@ OUT_NAME=train.160k.out
 
 BEAMS=30
 NBEST=1
-AL=0.75
-MODE="norm_al_conf2"
+AL=0.25
+MODE="norm_al2"
+# MODE="norm_al_conf2"
 
 python3 translate.py \
     -model models/iwslt-brnn2.s131_acc_62.71_ppl_7.74_e20.pt \

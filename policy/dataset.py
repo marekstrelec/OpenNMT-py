@@ -51,7 +51,7 @@ class ExploreDataset(data.Dataset):
                                     origin['h_out'],
                                     origin['d_out'],
                                     origin['attn'],
-                                    t_vec
+                                    # t_vec
                                 ]))
 
                                 Y.append({
