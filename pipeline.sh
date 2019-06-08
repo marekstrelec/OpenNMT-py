@@ -17,10 +17,7 @@ mkdir -p policy_models/run${RUN_NEXT_IDX}
 cp policy_models/run${RUN_IDX}/${MODEL_NAME_TRAIN}.model policy_models/run${RUN_NEXT_IDX}/start.model
 cp policy_models/run${RUN_IDX}/${MODEL_NAME_TRAIN}.opt policy_models/run${RUN_NEXT_IDX}/start.opt
 time ./run.sh ${RUN_IDX} ${MODEL_NAME_EXP} > out.log 2> out.err
-time python3 policy/train_policy.py --working_dir policy_models/run${RUN_NEXT_IDX} --load policy_models/run${RUN_NEXT_IDX}/start --start_epoch 1 --epochs 10 > out_p.log 2> out_p.err
+time python3 policy/train_policy.py --working_dir policy_models/run${RUN_NEXT_IDX} --load policy_models/run${RUN_NEXT_IDX}/start --start_epoch 1 --epochs 4 > out_p.log 2> out_p.err
 
-
-
-
-# time python3 policy/train_policy.py --working_dir policy_models/run${RUN_NEXT_IDX} --load policy_models/run${RUN_NEXT_IDX}/start --nooptload --start_epoch 1 --epochs 10 > out_p.log 2> out_p.err
-# time python3 policy/train_policy.py --working_dir policy_models/run${RUN_NEXT_IDX} --load policy_models/run${RUN_NEXT_IDX}/20.1559471183 --start_epoch 21 --epochs 22
+./run_translate.sh ${RUN_NEXT_IDX} train
+./run_translate.sh ${RUN_NEXT_IDX} valid

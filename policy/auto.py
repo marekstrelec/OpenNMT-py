@@ -16,10 +16,13 @@ class Autoencoder(nn.Module):
         super(Autoencoder, self).__init__()
         self.input_size = input_size
 
-        assert input_size == 500
+        assert input_size == 500 * 3
 
         hid_layer = 350
         latent_dim = 200
+
+        self.bn1 = nn.BatchNorm1d(num_features=1500)
+        self.bn2 = nn.BatchNorm1d(num_features=1000)
 
         self.fc1 = nn.Linear(input_size, hid_layer)
         self.fc2 = nn.Linear(hid_layer, latent_dim)

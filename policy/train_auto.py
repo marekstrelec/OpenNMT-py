@@ -53,7 +53,7 @@ def main():
     output_dir.mkdir(exist_ok=True, parents=True)
 
     # VARS
-    INPUT_SIZE = 500
+    INPUT_SIZE = 500 * 3
     OUTPUT_SIZE = 24725
 
     # DATASET_MODE = 'dist'

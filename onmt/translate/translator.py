@@ -715,6 +715,7 @@ class Translator(object):
             t_vec = np.zeros((h_out.shape[1], 100), dtype=np.float32)
             t_vec[:, step] = 1.0
             t_vec = torch.from_numpy(t_vec).to('cuda')
+            # guide_data = torch.cat((h_out.squeeze(0), dec_state, attn_max_embeds, t_vec), dim=1)
             guide_data = torch.cat((h_out.squeeze(0), dec_state, attn_max_embeds, t_vec), dim=1)
             beam.advance(log_probs, attn, guide, guide_data, explorer)
 
