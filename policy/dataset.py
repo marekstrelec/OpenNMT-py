@@ -1,6 +1,7 @@
 
 import time
 import pickle
+import sys
 
 import numpy as np
 import torch
@@ -26,6 +27,11 @@ class ExploreDataset(data.Dataset):
         self.data = self.load_data(self.pickle_path)
 
     def load_data(self, pickle_path):
+
+        pca_model = None
+        with open("policy/pca_518.model", "rb") as f:
+            pca_model = pickle.load(f)
+
         print("* Loading {0}".format(str(pickle_path)), end="\t")
         s_time = time.time()
 
@@ -47,17 +53,22 @@ class ExploreDataset(data.Dataset):
                             for _ in range(repeat):
                                 t_vec = np.zeros(100, dtype=np.float32)
                                 t_vec[t_idx] = 1.0
+
                                 X.append(np.hstack([
                                     origin['h_out'],
                                     origin['d_out'],
                                     origin['attn'],
-                                    # t_vec
+                                    t_vec
                                 ]))
 
                                 Y.append({
                                     'dist': origin['vals'],
                                     'conf': origin['conf']
                                 })
+
+
+        if pca_model:
+            X = pca_model.transform(X).astype(np.float32)
 
         print("\t(Loaded in {0:.2f}s)".format(time.time() - s_time))
 

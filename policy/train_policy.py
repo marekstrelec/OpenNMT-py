@@ -53,7 +53,8 @@ def main():
 
 
     # VARS
-    INPUT_SIZE = 500 * 3  # + 100
+    # INPUT_SIZE = 500 * 3  # + 100
+    INPUT_SIZE = 518
     OUTPUT_SIZE = 24725
 
     # DATASET_MODE = 'dist'
